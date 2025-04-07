@@ -5,7 +5,7 @@ import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 const origin = 'https://chaotic.ngrok.io'
 
 async function createConnectedClient() {
-  const transport = new SSEClientTransport(new URL(`${origin}/messages`));
+  const transport = new SSEClientTransport(new URL(`${origin}/sse`));
   const client = new Client(
     { name: 'CypressResorts', version: '1.0.0' },
     { capabilities: { prompts: {}, resources: {}, tools: {} } }
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     //const result = await client.callTool(input);
     const result = await client.callTool({
       name: toolName,
-      arguments: { message: input }
+      arguments: input
     });
 
     return NextResponse.json(result);

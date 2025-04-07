@@ -8,45 +8,34 @@ import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 
 let clientId = "clientA"
 
-export async function GET() {
-  console.log(`----entered profile route -----`)   
+export async function GET() { 
   const origin = 'https://chaotic.ngrok.io';
 
-  const transport = new SSEClientTransport(new URL(`${origin}/sse`));
-  
-  console.log('---created transport instance ----')
-  const client = new Client(
-    { name: 'GithubMCP', version: '1.0.0' }    
-  );
-  console.log('---created client instance ----')
-
-  await client.connect(transport);
-  console.log('---connected to client ----')
-
-  // List prompts
-  const prompts = await client.listPrompts();
-  console.log(prompts)
-
-  
-  // List resources
-  //const resources = await client.listResources();
-  //console.log(resources)
-
-  // List resources
-  const tools = await client.listTools();
-  console.log(tools)
-
-  // Read a resource
-  //const resource = await client.readResource("file:///example.txt");
-
-  // Call a tool
-  // const result = await client.callTool({
-  //   name: "example-tool",
-  //   arguments: {
-  //     arg1: "value"
-  //   }
-  // });
+  const transport = new SSEClientTransport(new URL(`${origin}/sse`));  
  
-
- return NextResponse.json({ tools });
+  const client = new Client(
+    { name: 'mcpmachine', version: '1.0.0' }    
+  );
+ 
+  await client.connect(transport); 
+  try {
+    // List prompts
+    const prompts = await client.listPrompts();
+  
+    // List resources
+    const resources = await client.listResources();
+  
+    // List tools
+    const tools = await client.listTools();  
+    
+    return Response.json({ tools });
+  } catch (error) {
+    console.error('Error fetching client data:', error);
+  
+    return new Response(
+      JSON.stringify({ error: 'Failed to fetch data from client' }),
+      { status: 500 }
+    );
+  }
+  
 }

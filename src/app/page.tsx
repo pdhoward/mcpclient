@@ -77,7 +77,7 @@ const ChatPage = () => {
   }, []);
 
   // Execute API Calls
-  const executeToolCall = async (toolName: string, input: string) => {
+  const executeToolCall = async (toolName: string, input: Record<string, any>) => {
     setLoading(true);
     const response = await fetch('/api/mcp/calltool', {
       method: 'POST',
@@ -187,9 +187,9 @@ const ChatPage = () => {
             <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">Execute Tools</h2>
 
             <div className="space-y-6">
-              {/* Echo Tool */}
+              {/* Translate Tool */}
               <div className="p-4 border rounded-lg bg-white dark:bg-gray-800 shadow-md">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">ECHO</h3>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Translate a Query to Machine Language</h3>
                 <input
                   type="text"
                   value={echoMessage}
@@ -198,11 +198,11 @@ const ChatPage = () => {
                   placeholder="Enter message..."
                 />
                 <button
-                  onClick={() => executeToolCall('echo', echoMessage)}
+                  onClick={() => executeToolCall('translate', {text: echoMessage})}
                   className="mt-3 w-full bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
                   disabled={loading}
                 >
-                  {loading ? 'Running...' : 'Run Echo'}
+                  {loading ? 'Running...' : 'Run Translate'}
                 </button>
                 {echoResult && <p className="mt-3 p-3 bg-gray-200 dark:bg-gray-700 rounded">{echoResult}</p>}
               </div>
