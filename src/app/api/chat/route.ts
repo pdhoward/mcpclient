@@ -1,187 +1,202 @@
-// app/api/chat/route.ts
-import { StreamData, streamText } from "ai";
+import { streamText, generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 
-// Function to fetch tools from MCP server
-async function fetchTools(): Promise<any[]> {
+interface Tool {
+  name: string;
+  description?: string;
+  inputSchema: {
+    type: "object";
+    properties?: Record<string, any>;
+    required?: string[];
+  };
+}
+
+const origin = "https://chaotic.ngrok.io";
+
+// 🛠️ Fetch tools and MCP client
+async function fetchTools() {
   try {
-    const response = await fetch("https://chaotic.ngrok.io/tools/list", {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
-    if (!response.ok) throw new Error("Failed to fetch tools");
-    return await response.json(); // Expecting [{ name, description, argsSchema }]
+    const transport = new SSEClientTransport(new URL(`${origin}/sse`));
+    const client = new Client({ name: "mcpmachine", version: "1.0.0" });
+    await client.connect(transport);
+    const { tools } = await client.listTools();
+    return { tools: tools || [], client };
   } catch (error) {
-    console.error("Error fetching tools:", error);
-    return [];
+    console.error("❌ Error fetching tools:", error);
+    return { tools: [], client: null };
   }
 }
 
-// Function to convert MCP tools to Vercel AI SDK format
-function getVercelAiTools(tools: any[]): Record<string, any> {
-  return tools.reduce((acc, tool) => {
-    acc[tool.name] = {
-      description: tool.description || `Executes ${tool.name}`,
-      parameters: tool.argsSchema || {},
-      execute: async (args: any) => {
-        const res = await fetch(`https://chaotic.ngrok.io/tools/${tool.name}/execute`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(args),
-        });
-        if (!res.ok) throw new Error(`Tool ${tool.name} execution failed`);
-        return res.json();
-      },
-    };
-    return acc;
-  }, {} as Record<string, any>);
+// 🧠 Find tool schema by name
+function getToolSchema(tools: Tool[], toolName: string) {
+  const tool = tools.find((t) => t.name === toolName);
+  return tool?.inputSchema || null;
 }
 
-// Function to get a tool’s schema by name
-function getToolSchema(tools: any[], toolName: string): any | null {
-  const tool = tools.find((t) => t.name === toolName);
-  return tool?.argsSchema || null;
+// 🧩 Identify missing required fields
+function getMissingParams(schema: any, inputs: Record<string, any>) {
+  const properties = schema?.properties ?? {};
+  const required = schema?.required ?? [];
+
+  const missing = required.filter((key: string) => {
+    return inputs[key] === undefined || inputs[key] === null || inputs[key] === "";
+  });
+
+  console.log("🧩 Schema required:", required);
+  console.log("🧩 Current inputs:", inputs);
+  console.log("🧩 Missing fields:", missing);
+
+  return missing;
+}
+
+// 🧪 Map tool schema to zod object
+function buildZodSchema(schema: any) {
+  const properties = schema?.properties ?? {};
+  return z.object(
+    Object.keys(properties).reduce((acc, key) => {
+      const prop = properties[key];
+      let zodType: z.ZodType<any>;
+      switch (prop.type) {
+        case "string": zodType = z.string(); break;
+        case "number": zodType = z.number(); break;
+        case "boolean": zodType = z.boolean(); break;
+        case "enum": zodType = z.enum(prop.enum || [""]); break;
+        default: zodType = z.any(); break;
+      }
+      acc[key] = zodType;
+      return acc;
+    }, {} as Record<string, z.ZodType<any>>)
+  );
 }
 
 export async function POST(req: Request) {
-  const { messages } = await req.json();
+  try {
+    const { messages } = await req.json();
+    const lastMessage = messages[messages.length - 1];
 
-  // Fetch tools from MCP server
-  const tools = await fetchTools();
-  const vercelAiTools = getVercelAiTools(tools);
+    console.log("🟡 POST started");
+    console.log("🔹 User message:", lastMessage);
 
-  const data = new StreamData();
+    // 1. Fetch tools and client
+    const { tools, client } = await fetchTools();
+    if (!client) throw new Error("Failed to connect to MCP server");
 
-  // Analyze message history to determine intent and state
-  const lastMessage = messages[messages.length - 1];
-  const previousAnnotations = messages
-    .flatMap((msg: any) => msg.annotations || [])
-    .filter((ann: any) => ann.type === "tool-input-state");
+    const toolMap = tools.reduce((acc, tool) => {
+      acc[tool.name] = {
+        description: tool.description || `Executes ${tool.name}`,
+        parameters: tool.inputSchema?.properties || {},
+        execute: async (args: any) => {
+          return await client.callTool({ name: tool.name, arguments: args });
+        },
+      };
+      return acc;
+    }, {} as Record<string, any>);
 
-  let toolName: string | null = null;
-  let collectedInputs: Record<string, any> = {};
+    // 2. Recover prior state (tool intent + partial inputs)
+    const previousAnnotations = messages
+      .flatMap((m: any) => m.annotations || [])
+      .filter((a: any) => a.type === "tool-input-state");
 
-  // Check if we're already collecting inputs for a tool
-  if (previousAnnotations.length > 0) {
-    const latestState = previousAnnotations[previousAnnotations.length - 1];
-    toolName = latestState.toolName;
-    collectedInputs = latestState.collectedInputs || {};
-  }
+    let toolName: string | null = null;
+    let collectedInputs: Record<string, any> = {};
 
- // If no tool is selected yet, detect intent
-if (!toolName && lastMessage.role === "user") {
-  const intentDetection = await streamText({
-    model: openai("gpt-4o"),
-    system: `You are an assistant that identifies user intent and selects the appropriate tool from: ${JSON.stringify(Object.keys(vercelAiTools))}. Respond with the tool name or "unknown" if unclear.`,
-    messages: [{ role: "user", content: lastMessage.content }],
-  });
-  const intentResult = await intentDetection.text; // Call text() as a method
-  toolName = intentResult.trim() === "unknown" ? null : intentResult.trim();
-}
+    if (previousAnnotations.length > 0) {
+      const latest = previousAnnotations[previousAnnotations.length - 1];
+      toolName = latest.toolName;
+      collectedInputs = latest.collectedInputs || {};
+      console.log("🔄 Recovered state from annotations:", { toolName, collectedInputs });
+    }
 
-  const result = await streamText({
-    model: openai("gpt-4o"),
-    system: `
-      You are a helpful assistant with access to tools from an MCP server at https://chaotic.ngrok.io.
-      Your task is to:
-      1. If no tool is selected, confirm the tool with the user or suggest one.
-      2. If a tool is selected, check its schema and prompt the user for any missing required inputs.
-      3. Once all inputs are collected, execute the tool.
-      Available tools: ${JSON.stringify(Object.keys(vercelAiTools))}.
-    `,
-    messages: [
-      ...messages,
-      ...(toolName
-        ? [{
+    // 3. If no tool intent yet, ask OpenAI
+    if (!toolName && lastMessage.role === "user") {
+      const intentDetection = await generateText({
+        model: openai("gpt-4o"),
+        temperature: 0,
+        messages: [
+          {
             role: "system",
-            content: `Selected tool: ${toolName}. Schema: ${JSON.stringify(getToolSchema(tools, toolName))}. Collected inputs so far: ${JSON.stringify(collectedInputs)}.`,
-          }]
-        : []),
-    ],
-    tools: vercelAiTools,
-    maxSteps: 5,
-    async onStepFinish({ text, toolCalls, toolResults }) {
-      if (toolName && !toolCalls?.length) {
-        // LLM responded with text, likely prompting for input
-        const schema = getToolSchema(tools, toolName);
-        if (schema) {
-          try {
-            // Attempt to parse user input from the last message
-            const potentialInput = z.object(schema.shape).partial().parse(lastMessage.content);
-            collectedInputs = { ...collectedInputs, ...potentialInput };
-          } catch {
-            // If parsing fails, assume it's not an input yet
+            content: `You are a tool selector. Respond with the tool name or "unknown".`,
+          },
+          {
+            role: "user",
+            content: lastMessage.content,
+          },
+        ],
+      });
+
+      const intentToolName = intentDetection.text.trim();
+      toolName = intentToolName === "unknown" ? null : intentToolName;
+      console.log("✅ OpenAI fallback intent:", toolName);
+    }
+
+    if (!toolName) {
+      return new Response(JSON.stringify({
+        message: "❌ No suitable tool detected. Please clarify your request.",
+      }), { status: 200 });
+    }
+
+    const toolSchema = getToolSchema(tools, toolName);
+
+    const stream = await streamText({
+      model: openai("gpt-4o"),
+      system: `
+You are a developer assistant. 
+Help the user collect all required inputs for the "${toolName}" tool.
+Tool schema: ${JSON.stringify(toolSchema)}.
+Collected so far: ${JSON.stringify(collectedInputs)}.
+Once inputs are complete, execute the tool.
+      `,
+      messages: [
+        ...messages,
+        {
+          role: "system",
+          content: `Tool selected: ${toolName}`,
+        },
+      ],
+      tools: {
+        [toolName]: toolMap[toolName],
+      },
+      maxSteps: 5,
+      async onStepFinish({ toolCalls, toolResults, text, finishReason }) {
+        try {
+          console.log("🔁 streamText step finished");
+          console.log("🧠 Assistant said:", text);
+          console.log("🔧 toolCalls:", toolCalls);
+          console.log("📦 toolResults:", toolResults);
+          console.log("🏁 finishReason:", finishReason);
+    
+          const missing = getMissingParams(toolSchema, collectedInputs);
+          console.log("🧩 Missing fields:", missing);
+    
+          if (toolCalls?.length) {
+            console.log("🛠️ LLM triggered tool call");
           }
-
-          const missingFields = Object.keys(schema.shape).filter(
-            (key) => schema.shape[key].isOptional() ? false : !(key in collectedInputs)
-          );
-
-          if (missingFields.length === 0) {
-            // All inputs collected, execute the tool
-            const toolCall = {
-              toolCallId: `manual_${Date.now()}`,
-              toolName,
-              args: collectedInputs,
-            };
-            const toolResult = await vercelAiTools[toolName].execute(collectedInputs);
-            data.appendMessageAnnotation({
-              type: "tool-status",
-              toolCalls: [toolCall],
-              toolResults: [{ result: toolResult, toolCallId: toolCall.toolCallId }],
-            });
-            toolName = null; // Reset after execution
-            collectedInputs = {};
+    
+          if (toolName && missing.length === 0) {
+            console.log("✅ All inputs collected. Tool should be executing.");
           } else {
-            // Prompt for missing fields
-            data.appendMessageAnnotation({
-              type: "tool-input-state",
-              toolName,
-              collectedInputs,
-              missingFields,
-            });
+            console.log("🧩 Waiting for more input from user.");
           }
+    
+          // ❗Do NOT return anything from here!
+        } catch (err) {
+          console.error("❌ onStepFinish error:", err);
         }
-      }
+      },
+    });
 
-      if (toolCalls?.length) {
-        console.log("Tool calls:", JSON.stringify(toolCalls));
-        console.log("Tool results:", JSON.stringify(toolResults));
-        data.appendMessageAnnotation({
-          type: "tool-status",
-          toolCalls: toolCalls.map((call) => ({
-            toolCallId: call.toolCallId,
-            toolName: call.toolName,
-            args: call.args,
-          })),
-          toolResults,
-        });
-      }
-    },
-    onFinish() {
-      data.close();
-    },
-  });
-
-  return result.toDataStreamResponse({
-    data,
-    getErrorMessage: (error: unknown) => {
-      if (error instanceof Error) {
-        switch (error.name) {
-          case "NoSuchToolError":
-            return "The requested tool is not available.";
-          case "InvalidToolArgumentsError":
-            return "Invalid arguments provided for the tool.";
-          case "ToolExecutionError":
-            return "An error occurred while executing the tool.";
-          case "ToolCallRepairError":
-            return "Failed to repair the tool call.";
-          default:
-            return `An unexpected error occurred: ${error.message}`;
-        }
-      }
-      return "An unknown error occurred.";
-    },
-  });
+    console.log("✅ Stream complete");
+    return stream.toDataStreamResponse();
+  } catch (error) {
+    console.error("❌ Fatal error in POST handler:", error);
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : "Unknown error",
+      }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
+  }
 }

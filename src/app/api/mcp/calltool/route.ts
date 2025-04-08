@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
   console.log(toolName, input)
 
   try {
-    //const result = await client.callTool(input);
+    
     const result = await client.callTool({
       name: toolName,
       arguments: input
