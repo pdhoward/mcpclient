@@ -4,6 +4,7 @@ import { useChat } from '@ai-sdk/react';
 import { useState, useEffect } from 'react';
 import { CloudSun, ChevronDown, ChevronUp } from 'lucide-react';
 import Loading from '@/components/Loading';
+import {Message} from "@/lib/types"
 
 interface StoredServer {
   id: string;
@@ -39,7 +40,7 @@ interface MCPData {
 //https://sdk.vercel.ai/docs/ai-sdk-core/provider-management#combining-custom-providers-provider-registry-and-middleware
 
 const ChatPage = () => {
-  const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [data, setData] = useState<MCPData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -105,44 +106,44 @@ const ChatPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
-
-    const userMessage = { role: "user", content: input };
+  
+    const userMessage: Message = {
+      role: "user",
+      content: input,
+      timestamp: Date.now(), // Set timestamp when message is created
+    };
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsLoading(true);
-
+  
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: [...messages, userMessage] }),
       });
-
+  
       if (!response.ok) throw new Error("Failed to fetch response");
-
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("No response body");
-
-      const decoder = new TextDecoder();
-      let result = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        result += decoder.decode(value, { stream: true });
-        setMessages((prev) => {
-          const lastMessage = prev[prev.length - 1];
-          if (lastMessage.role === "assistant") {
-            return [...prev.slice(0, -1), { role: "assistant", content: result }];
-          }
-          return [...prev, { role: "assistant", content: result }];
-        });
-      }
+  
+      const data = await response.json();
+     
+      const assistantMessage: Message = {
+        role: "assistant",
+        content: data.content,
+        annotations: data.annotations || undefined,
+        timestamp: Date.now(), // Set timestamp when response is received
+      };
+  
+      setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
       console.error("Error:", error);
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "Sorry, something went wrong." },
+        {
+          role: "assistant",
+          content: "Sorry, something went wrong.",
+          timestamp: Date.now(),
+        },
       ]);
     } finally {
       setIsLoading(false);

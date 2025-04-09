@@ -1,8 +1,9 @@
-import { streamText, generateText } from "ai";
+import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import {Message} from "@/lib/types"
 
 interface Tool {
   name: string;
@@ -38,21 +39,11 @@ function getToolSchema(tools: Tool[], toolName: string) {
 
 // 🧩 Identify missing required fields
 function getMissingParams(schema: any, inputs: Record<string, any>) {
-  const properties = schema?.properties ?? {};
   const required = schema?.required ?? [];
-
-  const missing = required.filter((key: string) => {
-    return inputs[key] === undefined || inputs[key] === null || inputs[key] === "";
-  });
-
-  console.log("🧩 Schema required:", required);
-  console.log("🧩 Current inputs:", inputs);
-  console.log("🧩 Missing fields:", missing);
-
-  return missing;
+  return required.filter((key: string) => !inputs[key]);
 }
 
-// 🧪 Map tool schema to zod object
+// 🧪 Map tool schema to Zod object
 function buildZodSchema(schema: any) {
   const properties = schema?.properties ?? {};
   return z.object(
@@ -60,7 +51,7 @@ function buildZodSchema(schema: any) {
       const prop = properties[key];
       let zodType: z.ZodType<any>;
       switch (prop.type) {
-        case "string": zodType = z.string(); break;
+        case "string": zodType = z.string().min(1); break;
         case "number": zodType = z.number(); break;
         case "boolean": zodType = z.boolean(); break;
         case "enum": zodType = z.enum(prop.enum || [""]); break;
@@ -72,28 +63,50 @@ function buildZodSchema(schema: any) {
   );
 }
 
+// 📦 Extract initial params from user query
+async function extractInitialParams(query: string, schema: any) {
+  const zodSchema = buildZodSchema(schema);
+  const prompt = `
+    Extract parameters from the user query based on this schema:
+    ${JSON.stringify(schema, null, 2)}
+    
+    Query: "${query.replace(/"/g, '\\"')}"
+    
+    Respond with a VALID JSON object containing only the parameters explicitly mentioned in the query.
+    If a parameter is not mentioned, exclude it from the response.
+    Do NOT include markdown like \`\`\`json or extra text—just the raw JSON object.
+    Example: {"repo": "proximity"}
+  `;
+
+  const result = await generateText({
+    model: openai("gpt-4o"),
+    temperature: 0,
+    system: prompt,
+    messages: [{ role: "user", content: "Extract parameters" }],
+  });
+
+  try {
+    const parsed = JSON.parse(result.text);
+    return zodSchema.partial().parse(parsed); // Validate and return partial object
+  } catch (e) {
+    console.error("Failed to parse initial params:", e);
+    return {};
+  }
+}
+
 export async function POST(req: Request) {
   try {
-    const { messages } = await req.json();
+    const { messages }: { messages: Message[] } = await req.json();
     const lastMessage = messages[messages.length - 1];
 
     console.log("🟡 POST started");
-    console.log("🔹 User message:", lastMessage);
+    console.log("🔹 User Last Message:", lastMessage);
 
     // 1. Fetch tools and client
     const { tools, client } = await fetchTools();
     if (!client) throw new Error("Failed to connect to MCP server");
 
-    const toolMap = tools.reduce((acc, tool) => {
-      acc[tool.name] = {
-        description: tool.description || `Executes ${tool.name}`,
-        parameters: tool.inputSchema?.properties || {},
-        execute: async (args: any) => {
-          return await client.callTool({ name: tool.name, arguments: args });
-        },
-      };
-      return acc;
-    }, {} as Record<string, any>);
+    console.log("🔹 Step 1 tool fetch completed");
 
     // 2. Recover prior state (tool intent + partial inputs)
     const previousAnnotations = messages
@@ -107,95 +120,150 @@ export async function POST(req: Request) {
       const latest = previousAnnotations[previousAnnotations.length - 1];
       toolName = latest.toolName;
       collectedInputs = latest.collectedInputs || {};
-      console.log("🔄 Recovered state from annotations:", { toolName, collectedInputs });
+      console.log("🔄 Recovered state:", { toolName, collectedInputs });
     }
 
-    // 3. If no tool intent yet, ask OpenAI
+    // 3. If no tool intent yet, detect it
     if (!toolName && lastMessage.role === "user") {
       const intentDetection = await generateText({
         model: openai("gpt-4o"),
         temperature: 0,
-        messages: [
-          {
-            role: "system",
-            content: `You are a tool selector. Respond with the tool name or "unknown".`,
-          },
-          {
-            role: "user",
-            content: lastMessage.content,
-          },
-        ],
+        system: `
+          You are an expert assistant mapping user requests to tools.
+          Respond ONLY with the tool name or "unknown".
+          
+          Examples:
+          - "Translate this to Spanish" → translate
+          - "Get README file from repo" → get_file
+          - "unknown task" → unknown
+          
+          Available tools:
+          ${tools.map((t) => `- ${t.name}: ${t.description}`).join("\n")}
+        `,
+        messages: [{ role: "user", content: lastMessage.content }],
       });
 
-      const intentToolName = intentDetection.text.trim();
-      toolName = intentToolName === "unknown" ? null : intentToolName;
-      console.log("✅ OpenAI fallback intent:", toolName);
+      toolName = intentDetection.text.trim() === "unknown" ? null : intentDetection.text.trim();
+      console.log("✅ Step 2 Intent Detected:", toolName);
+
+      if (toolName) {
+        const schema = getToolSchema(tools, toolName);
+        collectedInputs = await extractInitialParams(lastMessage.content, schema);
+      }
     }
 
     if (!toolName) {
-      return new Response(JSON.stringify({
-        message: "❌ No suitable tool detected. Please clarify your request.",
-      }), { status: 200 });
+      console.log("🔹 Step 3 Tool Intent Not Deciphered");
+      return new Response(
+        JSON.stringify({ message: "❌ No suitable tool detected. Please clarify your request." }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
     }
 
+    // 4. Get tool schema and check missing params
     const toolSchema = getToolSchema(tools, toolName);
+    if (!toolSchema) throw new Error(`Tool schema for ${toolName} not found`);   
 
-    const stream = await streamText({
+    // 5. Update collected inputs from the latest user message (if we have prior state)
+    if (previousAnnotations.length > 0 && lastMessage.role === "user") {
+      const latestPrompt = `
+        Given the current collected inputs:
+        ${JSON.stringify(collectedInputs, null, 2)}
+        
+        And the schema:
+        ${JSON.stringify(toolSchema, null, 2)}
+        
+        Extract any new parameters from this user message: "${lastMessage.content.replace(/"/g, '\\"')}"
+        Respond with a VALID JSON object containing only the new parameters.(e.g., {"owner": "machine"}).
+         Return ONLY the raw JSON string, with no markdown (e.g., no \`\`\`json), no extra text, and no explanations—just the JSON.
+      `;
+      const newParamsResult = await generateText({
+        model: openai("gpt-4o"),
+        temperature: 0,
+        system: latestPrompt,
+        messages: [{ role: "user", content: "Extract new parameters" }],
+      });
+
+      try {
+        const newParams = JSON.parse(newParamsResult.text);
+        collectedInputs = { ...collectedInputs, ...newParams };
+        console.log("PARAM STEP --- Updated collectedInputs:", collectedInputs); // Debug
+      } catch (e) {
+        console.error("Failed to parse new params:", e);
+      }
+    }
+
+    const missingParams = getMissingParams(toolSchema, collectedInputs);
+    console.log("🔹 Step 4 - State of Missing Params:", JSON.stringify(missingParams));
+
+    // 7. If all params are collected, signal readiness (but don’t execute yet)
+    if (missingParams.length === 0) {
+      console.log("🔹 Step Finished - all Params collected:");
+      const response: Message = {
+        role: "assistant",
+        content: "✅ All parameters collected. Ready to proceed.",
+        annotations: [{
+          type: "tool-input-state",
+          toolName,
+          collectedInputs,
+          finished: true,
+        }],
+        timestamp: Date.now(),
+      };
+  
+      return new Response(
+        JSON.stringify(response),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+      
+    }  
+   
+    // 8. Prompt user for the next missing parameter
+    const nextParam = missingParams[0];
+    const paramDescription = toolSchema.properties && toolSchema.properties[nextParam]?.description 
+      ? toolSchema.properties[nextParam].description 
+      : `the ${nextParam}`;
+
+    const promptResponse = await generateText({
       model: openai("gpt-4o"),
+      temperature: 0.5,
       system: `
-You are a developer assistant. 
-Help the user collect all required inputs for the "${toolName}" tool.
-Tool schema: ${JSON.stringify(toolSchema)}.
-Collected so far: ${JSON.stringify(collectedInputs)}.
-Once inputs are complete, execute the tool.
+        You are a helpful assistant guiding the user to provide missing parameters.
+        Current collected inputs: ${JSON.stringify(collectedInputs, null, 2)}
+        Missing parameter: ${nextParam}
+        Description: ${paramDescription}
+        
+        Generate a natural, concise prompt asking the user to provide the missing parameter.
       `,
-      messages: [
-        ...messages,
-        {
-          role: "system",
-          content: `Tool selected: ${toolName}`,
-        },
-      ],
-      tools: {
-        [toolName]: toolMap[toolName],
-      },
-      maxSteps: 5,
-      async onStepFinish({ toolCalls, toolResults, text, finishReason }) {
-        try {
-          console.log("🔁 streamText step finished");
-          console.log("🧠 Assistant said:", text);
-          console.log("🔧 toolCalls:", toolCalls);
-          console.log("📦 toolResults:", toolResults);
-          console.log("🏁 finishReason:", finishReason);
-    
-          const missing = getMissingParams(toolSchema, collectedInputs);
-          console.log("🧩 Missing fields:", missing);
-    
-          if (toolCalls?.length) {
-            console.log("🛠️ LLM triggered tool call");
-          }
-    
-          if (toolName && missing.length === 0) {
-            console.log("✅ All inputs collected. Tool should be executing.");
-          } else {
-            console.log("🧩 Waiting for more input from user.");
-          }
-    
-          // ❗Do NOT return anything from here!
-        } catch (err) {
-          console.error("❌ onStepFinish error:", err);
-        }
-      },
+      messages: [{ role: "user", content: "" }], // placeholder
     });
 
-    console.log("✅ Stream complete");
-    return stream.toDataStreamResponse();
+    const response: Message = {
+      role: "assistant",
+      content: promptResponse.text,
+      annotations: [{
+        type: "tool-input-state",
+        toolName,
+        collectedInputs,
+        finished: false,
+      }],
+      timestamp: Date.now(),
+    };
+
+    return new Response(
+      JSON.stringify(response),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
+
   } catch (error) {
     console.error("❌ Fatal error in POST handler:", error);
+    const response: Message = {
+      role: "assistant",
+      content: error instanceof Error ? error.message : "Unknown error",
+      timestamp: Date.now(),
+    };
     return new Response(
-      JSON.stringify({
-        error: error instanceof Error ? error.message : "Unknown error",
-      }),
+      JSON.stringify(response),
       { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
