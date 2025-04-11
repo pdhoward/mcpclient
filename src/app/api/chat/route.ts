@@ -115,12 +115,52 @@ export async function POST(req: Request) {
 
     let toolName: string | null = null;
     let collectedInputs: Record<string, any> = {};
+    let finished = false;
 
     if (previousAnnotations.length > 0) {
       const latest = previousAnnotations[previousAnnotations.length - 1];
       toolName = latest.toolName;
       collectedInputs = latest.collectedInputs || {};
       console.log("🔄 Recovered state:", { toolName, collectedInputs });
+    }
+
+     // 2.5. Check for context switch or confirmation
+     if (lastMessage.role === "user" && toolName) {
+      const contextCheck = await generateText({
+        model: openai("gpt-4o"),
+        temperature: 0,
+        system: `
+          Current tool: ${toolName}
+          Available tools: ${tools.map((t) => `- ${t.name}: ${t.description}`).join("\n")}
+          
+          Does this user message suggest a new intent different from the current tool and conversation flow?
+          Message: "${lastMessage.content.replace(/"/g, '\\"')}"
+          
+          Respond with "yes" or "no" if a switch in the context is detected
+        `,
+        messages: [{ role: "user", content: "" }],
+      });
+
+      const intentResult = contextCheck.text.trim();
+      console.log("🔹 Context check:", intentResult);
+
+      if (intentResult === "yes") {
+        // Reset state for new intent
+        toolName = null;
+        collectedInputs = {};
+        finished = false;
+      // } else if (intentResult === "confirm" && finished) {
+      //   // Execute tool (placeholder for next step)
+      //   const response: Message = {
+      //     role: "assistant",
+      //     content: `Executing ${toolName} with params: ${JSON.stringify(collectedInputs)}`,
+      //     timestamp: Date.now(),
+      //   };
+      //   return new Response(JSON.stringify(response), {
+      //     status: 200,
+      //     headers: { "Content-Type": "application/json" },
+      //   });
+      }
     }
 
     // 3. If no tool intent yet, detect it

@@ -150,6 +150,12 @@ const ChatPage = () => {
     }
   };
 
+   // Reset function to clear messages and input
+   const handleReset = () => {
+    setMessages([]);
+    setInput("");
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-sky-100 to-white dark:from-sky-900 dark:to-slate-900">
       <div className="container mx-auto px-4 py-16">
@@ -244,30 +250,52 @@ const ChatPage = () => {
                 }`}
               >
                 {msg.content}
+                {msg.role === "assistant" &&
+                    msg.annotations?.some((a) => a.finished) && (
+                      <div className="mt-2">
+                        <p className="font-semibold">Collected Parameters:</p>
+                        <ul className="list-disc pl-4">
+                          {Object.entries(msg.annotations[0]?.collectedInputs || {}).map(
+                            ([key, value]) => (
+                              <li key={key}>
+                                {key}: {String(value)}
+                              </li>
+                            )
+                          )}
+                        </ul>
+                  </div>
+                  )}                
               </div>
             ))
           )}
         </div>
 
-        {/* Chat Input */}
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="e.g., Fetch the License file from pdhoward/proximity"
-            className="flex-1 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            disabled={isLoading}
-          />
-          <button
-            type="submit"
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300"
-            disabled={isLoading}
-          >
-            {isLoading ? "Sending..." : "Send"}
-          </button>
-        </form>
-      </div>
+            {/* Chat Input */}
+            <form onSubmit={handleSubmit} className="flex gap-2">
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="e.g., Fetch the License file from pdhoward/proximity"
+                className="flex-1 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={isLoading}
+              />
+              <button
+                type="submit"
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300"
+                disabled={isLoading}
+              >
+                {isLoading ? "Sending..." : "Send"}
+              </button>
+            </form>
+            <button
+                onClick={handleReset}
+                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+              >
+                Reset
+              </button>
+          </div>
+      
         </div>
       </div>
     </div>
