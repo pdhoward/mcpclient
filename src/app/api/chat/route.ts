@@ -123,43 +123,134 @@ export async function POST(req: Request) {
       collectedInputs = latest.collectedInputs || {};
       console.log("🔄 Recovered state:", { toolName, collectedInputs });
     }
-
-     // 2.5. Check for context switch or confirmation
+      ////////////////////////////////////////////////////
+     //  2.5. Check for context switch or confirmation //
+     ///////////////////////////////////////////////////
      if (lastMessage.role === "user" && toolName) {
+      
+       // Get tool schema and check missing params
+      const toolSchema = getToolSchema(tools, toolName);
+      if (!toolSchema) throw new Error(`Tool schema for ${toolName} not found`); 
+
+      const missingParams = getMissingParams(toolSchema, collectedInputs);
+
+      // Construct a detailed conversation history for context
+      const conversationHistory = messages
+      .map((msg: any) => `${msg.role}: ${msg.content}`)
+      .join("\n");
+      
+      // Call the LLM to check for context switch or execution intent
+      
       const contextCheck = await generateText({
         model: openai("gpt-4o"),
         temperature: 0,
         system: `
-          Current tool: ${toolName}
-          Available tools: ${tools.map((t) => `- ${t.name}: ${t.description}`).join("\n")}
-          
-          Does this user message suggest a new intent different from the current tool and conversation flow?
-          Message: "${lastMessage.content.replace(/"/g, '\\"')}"
-          
-          Respond with "yes" or "no" if a switch in the context is detected
+          You are an assistant helping to manage a workflow in an MCP server. Your task is to determine if the user's latest message indicates:
+          1. A context switch (a new intent different from the current tool and conversation flow).
+          2. A request to execute the current tool (if all required parameters are collected).
+          3. Continuation of the current workflow (e.g., providing a parameter value).
+          4. An unclear intent that requires clarification.
+      
+          **Current Context:**
+          - Current tool: ${toolName}
+          - Tool description: ${tools.find((t) => t.name === toolName)?.description || "N/A"}
+          - Collected inputs: ${JSON.stringify(collectedInputs)}
+          - Missing required parameters: ${missingParams.length > 0 ? missingParams.join(", ") : "None"}
+          - Next expected parameter (if any): ${missingParams.length > 0 ? missingParams[0] : "None"}
+          - Available tools:
+            ${tools.map((t) => `- ${t.name}: ${t.description}`).join("\n")}
+          - Conversation history:
+            ${conversationHistory}
+      
+          **User's Latest Message:**
+          "${lastMessage.content.replace(/"/g, '\\"')}"
+      
+          **Instructions:**
+          - If the user's message suggests a new intent (e.g., switching to a different tool or task, like "fetch all repos" instead of "fetch a file"), respond with "switch".
+          - If the user's message indicates a request to execute the current tool (e.g., "run it", "execute", "go ahead") and there are no missing parameters, respond with "execute".
+          - If the user's message aligns with the current workflow (e.g., providing a value for the next expected parameter, such as a username, repo name, or file path), respond with "continue". Note: A single word or short phrase that fits the expected parameter type (e.g., a username like "octocat" for an "owner" parameter) should be considered a "continue".
+          - If the intent is unclear (e.g., the message doesn't fit the expected parameter type or seems unrelated to the current workflow), respond with "unclear" and suggest asking the user for clarification.
+      
+          **Examples:**
+          - If the next expected parameter is "owner" and the user says "octocat", respond with "continue".
+          - If the user says "fetch all repos" while the current tool is "fetchGithubFile", respond with "switch".
+          - If the user says "execute now" and there are no missing parameters, respond with "execute".
+          - If the user says "what's the weather like?" while in the middle of a workflow, respond with "switch".
+          - If the user says "huh?" or something unrelated to the expected parameter, respond with "unclear".
         `,
         messages: [{ role: "user", content: "" }],
       });
-
+      
       const intentResult = contextCheck.text.trim();
       console.log("🔹 Context check:", intentResult);
-
-      if (intentResult === "yes") {
-        // Reset state for new intent
-        toolName = null;
-        collectedInputs = {};
-        finished = false;
-      // } else if (intentResult === "confirm" && finished) {
-      //   // Execute tool (placeholder for next step)
-      //   const response: Message = {
-      //     role: "assistant",
-      //     content: `Executing ${toolName} with params: ${JSON.stringify(collectedInputs)}`,
-      //     timestamp: Date.now(),
-      //   };
-      //   return new Response(JSON.stringify(response), {
-      //     status: 200,
-      //     headers: { "Content-Type": "application/json" },
-      //   });
+      
+      switch (intentResult) {
+        case "switch":
+          // Reset state for new intent
+          toolName = null;
+          collectedInputs = {};
+          finished = false;
+          const switchResponse: Message = {
+            role: "assistant",
+            content: "It looks like you want to switch tasks. What would you like to do next?",
+            timestamp: Date.now(),
+            annotations: [{ type: "tool-input-state", toolName: undefined, collectedInputs: {}, finished: false }],
+          };
+          return new Response(JSON.stringify(switchResponse), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+      
+        case "execute":
+          if (missingParams.length === 0) {
+            // Execute the tool since all parameters are collected
+            const executeResponse: Message = {
+              role: "assistant",
+              content: `Executing ${toolName} with params: ${JSON.stringify(collectedInputs)}`,
+              timestamp: Date.now(),
+              annotations: [{ type: "tool-input-state", toolName: undefined, collectedInputs: {}, finished: false }],
+            };
+            // Reset state after execution
+            toolName = null;
+            collectedInputs = {};
+            finished = false;
+            return new Response(JSON.stringify(executeResponse), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+          break;
+      
+        case "continue":
+          // Continue collecting parameters (handled in the next step of your workflow)
+          finished = missingParams.length === 0;
+          break;
+      
+        case "unclear":
+          const unclearResponse: Message = {
+            role: "assistant",
+            content: "I'm not sure what you mean. Could you clarify your request?",
+            timestamp: Date.now(),
+            annotations: [{ type: "tool-input-state", toolName, collectedInputs, finished }],
+          };
+          return new Response(JSON.stringify(unclearResponse), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+      
+        default:
+          // Handle unexpected intentResult values
+          console.warn(`Unexpected intentResult: ${intentResult}`);
+          const defaultResponse: Message = {
+            role: "assistant",
+            content: "I didn't understand your intent. Could you please rephrase or clarify what you'd like to do?",
+            timestamp: Date.now(),
+            annotations: [{ type: "tool-input-state", toolName, collectedInputs, finished }],
+          };
+          return new Response(JSON.stringify(defaultResponse), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
       }
     }
 
@@ -227,7 +318,8 @@ export async function POST(req: Request) {
       try {
         const newParams = JSON.parse(newParamsResult.text);
         collectedInputs = { ...collectedInputs, ...newParams };
-        console.log("PARAM STEP --- Updated collectedInputs:", collectedInputs); // Debug
+        console.log("🔹 Parameter check: Inputs Collected", collectedInputs);
+        
       } catch (e) {
         console.error("Failed to parse new params:", e);
       }
