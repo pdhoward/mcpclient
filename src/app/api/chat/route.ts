@@ -139,7 +139,7 @@ export async function POST(req: Request) {
       .map((msg: any) => `${msg.role}: ${msg.content}`)
       .join("\n");
       
-      // Call the LLM to check for context switch or execution intent
+      // Call the LLM to check for context switch or execution intent  
       
       const contextCheck = await generateText({
         model: openai("gpt-4o"),
