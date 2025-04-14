@@ -3,7 +3,23 @@ import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
-import {Message} from "@/lib/types"
+
+// Define types for clarity and type safety
+interface Message {
+  role: "user" | "assistant";
+  content: string;
+  timestamp: number;
+  annotations?: ToolInputState[];
+}
+
+interface ToolInputState {
+  type: "tool-input-state";
+  toolName: string | null;
+  collectedInputs: Record<string, any>;
+  finished: boolean;
+  contextStatePending?: boolean;
+  toolPending?: string | null;
+}
 
 interface Tool {
   name: string;
@@ -17,8 +33,8 @@ interface Tool {
 
 const origin = "https://chaotic.ngrok.io";
 
-// 🛠️ Fetch tools and MCP client
-async function fetchTools() {
+// Helper: Fetch tools and MCP client
+async function fetchToolsAndClient(): Promise<{ tools: Tool[]; client: Client }> {
   try {
     const transport = new SSEClientTransport(new URL(`${origin}/sse`));
     const client = new Client({ name: "mcpmachine", version: "1.0.0" });
@@ -27,35 +43,51 @@ async function fetchTools() {
     return { tools: tools || [], client };
   } catch (error) {
     console.error("❌ Error fetching tools:", error);
-    return { tools: [], client: null };
+    throw new Error("Failed to connect to MCP server");
   }
 }
 
-// 🧠 Find tool schema by name
-function getToolSchema(tools: Tool[], toolName: string) {
+// Helper: Get tool schema by name
+function getToolSchema(tools: Tool[], toolName: string | null): Tool["inputSchema"] | null {
+  if (!toolName) return null;
   const tool = tools.find((t) => t.name === toolName);
   return tool?.inputSchema || null;
 }
 
-// 🧩 Identify missing required fields
-function getMissingParams(schema: any, inputs: Record<string, any>) {
-  const required = schema?.required ?? [];
+// Helper: Identify missing required fields
+function getMissingParams(
+  schema: { type: "object"; properties?: Record<string, any>; required?: string[] } | null,
+  inputs: Record<string, any>
+): string[] {
+  if (!schema) return []; // Handle null schema by returning empty array
+  const required = schema.required ?? [];
   return required.filter((key: string) => !inputs[key]);
 }
 
-// 🧪 Map tool schema to Zod object
-function buildZodSchema(schema: any) {
-  const properties = schema?.properties ?? {};
+// Helper: Map tool schema to Zod object
+function buildZodSchema(schema: Tool["inputSchema"]): z.ZodObject<any> {
+  if (!schema?.properties) return z.object({});
+  const properties = schema.properties;
   return z.object(
     Object.keys(properties).reduce((acc, key) => {
       const prop = properties[key];
       let zodType: z.ZodType<any>;
       switch (prop.type) {
-        case "string": zodType = z.string().min(1); break;
-        case "number": zodType = z.number(); break;
-        case "boolean": zodType = z.boolean(); break;
-        case "enum": zodType = z.enum(prop.enum || [""]); break;
-        default: zodType = z.any(); break;
+        case "string":
+          zodType = z.string().min(1);
+          break;
+        case "number":
+          zodType = z.number();
+          break;
+        case "boolean":
+          zodType = z.boolean();
+          break;
+        case "enum":
+          zodType = z.enum(prop.enum || [""]);
+          break;
+        default:
+          zodType = z.any();
+          break;
       }
       acc[key] = zodType;
       return acc;
@@ -63,8 +95,11 @@ function buildZodSchema(schema: any) {
   );
 }
 
-// 📦 Extract initial params from user query
-async function extractInitialParams(query: string, schema: any) {
+// Helper: Extract parameters from user query
+async function extractParameters(
+  query: string,
+  schema: Tool["inputSchema"]
+): Promise<Record<string, any>> {
   const zodSchema = buildZodSchema(schema);
   const prompt = `
     Extract parameters from the user query based on this schema:
@@ -74,229 +109,393 @@ async function extractInitialParams(query: string, schema: any) {
     
     Respond with a VALID JSON object containing only the parameters explicitly mentioned in the query.
     If a parameter is not mentioned, exclude it from the response.
-    Do NOT include markdown like \`\`\`json or extra text—just the raw JSON object.
+    Return ONLY the raw JSON string, with no markdown, no extra text, and no explanations.
     Example: {"repo": "proximity"}
   `;
 
-  const result = await generateText({
-    model: openai("gpt-4o"),
-    temperature: 0,
-    system: prompt,
-    messages: [{ role: "user", content: "Extract parameters" }],
-  });
-
   try {
+    const result = await generateText({
+      model: openai("gpt-4o"),
+      temperature: 0,
+      system: prompt,
+      messages: [{ role: "user", content: "Extract parameters" }],
+    });
     const parsed = JSON.parse(result.text);
-    return zodSchema.partial().parse(parsed); // Validate and return partial object
+    return zodSchema.partial().parse(parsed);
   } catch (e) {
-    console.error("Failed to parse initial params:", e);
+    console.error("Failed to parse parameters:", e);
     return {};
   }
 }
 
+// Helper: Detect tool intent from user message
+async function detectToolIntent(
+  message: string,
+  tools: Tool[]
+): Promise<string | null> {
+  const intentDetection = await generateText({
+    model: openai("gpt-4o"),
+    temperature: 0,
+    system: `
+      You are an expert assistant mapping user requests to tools.
+      Respond ONLY with the tool name or "unknown".
+      
+      Examples:
+      - "Translate this to Spanish" → translate
+      - "Get README file from repo" → get_file_contents
+      - "unknown task" → unknown
+      
+      Available tools:
+      ${tools.map((t) => `- ${t.name}: ${t.description}`).join("\n")}
+    `,
+    messages: [{ role: "user", content: message }],
+  });
+
+  const toolName = intentDetection.text.trim();
+  return toolName === "unknown" ? null : toolName;
+}
+
+// Helper: Check for context switch or execution request
+async function handleContextSwitch(
+  lastMessage: Message,
+  tools: Tool[],
+  toolName: string | null,
+  collectedInputs: Record<string, any>,
+  finished: boolean,
+  missingParams: string[]
+): Promise<{
+  response: Message | null;
+  newToolName: string | null;
+  newCollectedInputs: Record<string, any>;
+  newFinished: boolean;
+}> {
+  if (!toolName) {
+    return {
+      response: null,
+      newToolName: null,
+      newCollectedInputs: collectedInputs,
+      newFinished: finished,
+    };
+  }
+
+  const userMessage = lastMessage.content.trim().toLowerCase();
+
+  // Check for execution request
+  const executionKeywords = ["run it", "execute", "go ahead", "do it", "submit"];
+  const isExecutionRequest = executionKeywords.some((keyword) =>
+    userMessage.includes(keyword)
+  );
+
+  if (isExecutionRequest && missingParams.length === 0) {
+    const executeResponse: Message = {
+      role: "assistant",
+      content: `Executing ${toolName} with params: ${JSON.stringify(collectedInputs)}`,
+      timestamp: Date.now(),
+      annotations: [
+        {
+          type: "tool-input-state",
+          toolName: null,
+          collectedInputs: {},
+          finished: false,
+          contextStatePending: false,
+          toolPending: null,
+        },
+      ],
+    };
+    return {
+      response: executeResponse,
+      newToolName: null,
+      newCollectedInputs: {},
+      newFinished: false,
+    };
+  }
+
+  // Check for potential context switch by looking for references to other tools
+  let potentialNewTool: string | null = null;
+  for (const tool of tools) {
+    if (tool.name === toolName) continue; // Skip the current tool
+    const toolNameLower = tool.name.toLowerCase();
+    const descriptionLower = tool.description?.toLowerCase() || "";
+    const toolKeywords = descriptionLower
+      .split(" ")
+      .filter((word) => word.length > 3);
+    if (
+      userMessage.includes(toolNameLower) ||
+      toolKeywords.some((keyword) => userMessage.includes(keyword))
+    ) {
+      potentialNewTool = tool.name;
+      break;
+    }
+  }
+
+  if (potentialNewTool) {
+    const confirmResponse: Message = {
+      role: "assistant",
+      content: `It looks like you might want to switch to ${potentialNewTool}. Do you want to proceed? (Say 'yes' to switch or 'no' to continue with ${toolName})`,
+      timestamp: Date.now(),
+      annotations: [
+        {
+          type: "tool-input-state",
+          toolName,
+          collectedInputs,
+          finished,
+          contextStatePending: true,
+          toolPending: potentialNewTool,
+        },
+      ],
+    };
+    return {
+      response: confirmResponse,
+      newToolName: toolName,
+      newCollectedInputs: collectedInputs,
+      newFinished: finished,
+    };
+  }
+
+  // No context switch or execution request; assume continuation
+  return {
+    response: null,
+    newToolName: toolName,
+    newCollectedInputs: collectedInputs,
+    newFinished: missingParams.length === 0,
+  };
+}
+
+// Helper: Handle pending context switch confirmation
+async function handlePendingContextSwitch(
+  lastMessage: Message,
+  toolName: string | null,
+  toolPending: string | null,
+  collectedInputs: Record<string, any>,
+  finished: boolean,
+  missingParams: string[]
+): Promise<{
+  response: Message;
+  newToolName: string | null;
+  newCollectedInputs: Record<string, any>;
+  newFinished: boolean;
+}> {
+  if (!toolName || !toolPending) {
+    return {
+      response: {
+        role: "assistant",
+        content: "Error: Invalid state for context switch confirmation.",
+        timestamp: Date.now(),
+        annotations: [
+          {
+            type: "tool-input-state",
+            toolName,
+            collectedInputs,
+            finished,
+            contextStatePending: false,
+            toolPending: null,
+          },
+        ],
+      },
+      newToolName: toolName,
+      newCollectedInputs: collectedInputs,
+      newFinished: finished,
+    };
+  }
+
+  const userResponse = lastMessage.content.trim().toLowerCase();
+  const isConfirmation = ["yes", "y", "sure", "okay", "confirm"].some((word) =>
+    userResponse.includes(word)
+  );
+  const isCancellation = ["no", "n", "cancel", "nevermind", "stop"].some((word) =>
+    userResponse.includes(word)
+  );
+
+  if (isConfirmation) {
+    // Proceed with the context switch
+    const newToolName = toolPending;
+    const newCollectedInputs = {};
+    const newFinished = false;
+    const switchResponse: Message = {
+      role: "assistant",
+      content: `Switching to ${newToolName}. Let's start with the required parameters. ${
+        missingParams.length > 0 ? `Please provide the ${missingParams[0]}.` : "No parameters needed."
+      }`,
+      timestamp: Date.now(),
+      annotations: [
+        {
+          type: "tool-input-state",
+          toolName: newToolName,
+          collectedInputs: newCollectedInputs,
+          finished: newFinished,
+          contextStatePending: false,
+          toolPending: null,
+        },
+      ],
+    };
+    return {
+      response: switchResponse,
+      newToolName,
+      newCollectedInputs,
+      newFinished,
+    };
+  } else if (isCancellation) {
+    // Cancel the context switch and continue with the current tool
+    const cancelResponse: Message = {
+      role: "assistant",
+      content: `Okay, sticking with ${toolName}. ${
+        missingParams.length > 0 ? `Please provide the ${missingParams[0]}.` : "All parameters collected. Ready to execute."
+      }`,
+      timestamp: Date.now(),
+      annotations: [
+        {
+          type: "tool-input-state",
+          toolName,
+          collectedInputs,
+          finished,
+          contextStatePending: false,
+          toolPending: null,
+        },
+      ],
+    };
+    return {
+      response: cancelResponse,
+      newToolName: toolName,
+      newCollectedInputs: collectedInputs,
+      newFinished: finished,
+    };
+  } else {
+    // Unclear response to the confirmation prompt
+    const unclearResponse: Message = {
+      role: "assistant",
+      content: `I'm not sure if you want to switch tasks. Please say 'yes' to switch to ${toolPending} or 'no' to continue with ${toolName}.`,
+      timestamp: Date.now(),
+      annotations: [
+        {
+          type: "tool-input-state",
+          toolName,
+          collectedInputs,
+          finished,
+          contextStatePending: true,
+          toolPending,
+        },
+      ],
+    };
+    return {
+      response: unclearResponse,
+      newToolName: toolName,
+      newCollectedInputs: collectedInputs,
+      newFinished: finished,
+    };
+  }
+}
+
+// Main API handler
 export async function POST(req: Request) {
   try {
+    // Phase 1: Parse request and fetch tools
     const { messages }: { messages: Message[] } = await req.json();
     const lastMessage = messages[messages.length - 1];
-
     console.log("🟡 POST started");
     console.log("🔹 User Last Message:", lastMessage);
 
-    // 1. Fetch tools and client
-    const { tools, client } = await fetchTools();
-    if (!client) throw new Error("Failed to connect to MCP server");
+    const { tools, client } = await fetchToolsAndClient();
+    console.log("🔹 Step 1: Tools fetched");
 
-    console.log("🔹 Step 1 tool fetch completed");
-
-    // 2. Recover prior state (tool intent + partial inputs)
+    // Phase 2: Recover prior state
     const previousAnnotations = messages
-      .flatMap((m: any) => m.annotations || [])
-      .filter((a: any) => a.type === "tool-input-state");
+      .flatMap((m) => m.annotations || [])
+      .filter((a) => a.type === "tool-input-state");
 
     let toolName: string | null = null;
     let collectedInputs: Record<string, any> = {};
     let finished = false;
+    let contextStatePending = false;
+    let toolPending: string | null = null;
 
     if (previousAnnotations.length > 0) {
       const latest = previousAnnotations[previousAnnotations.length - 1];
       toolName = latest.toolName;
       collectedInputs = latest.collectedInputs || {};
-      console.log("🔄 Recovered state:", { toolName, collectedInputs });
-    }
-      ////////////////////////////////////////////////////
-     //  2.5. Check for context switch or confirmation //
-     ///////////////////////////////////////////////////
-     if (lastMessage.role === "user" && toolName) {
-      
-       // Get tool schema and check missing params
-      const toolSchema = getToolSchema(tools, toolName);
-      if (!toolSchema) throw new Error(`Tool schema for ${toolName} not found`); 
-
-      const missingParams = getMissingParams(toolSchema, collectedInputs);
-
-      // Construct a detailed conversation history for context
-      const conversationHistory = messages
-      .map((msg: any) => `${msg.role}: ${msg.content}`)
-      .join("\n");
-      
-      // Call the LLM to check for context switch or execution intent  
-      
-      const contextCheck = await generateText({
-        model: openai("gpt-4o"),
-        temperature: 0,
-        system: `
-          You are an assistant helping to manage a workflow in an MCP server. Your task is to determine if the user's latest message indicates:
-          1. A context switch (a new intent different from the current tool and conversation flow).
-          2. A request to execute the current tool (if all required parameters are collected).
-          3. Continuation of the current workflow (e.g., providing a parameter value).
-          4. An unclear intent that requires clarification.
-      
-          **Current Context:**
-          - Current tool: ${toolName}
-          - Tool description: ${tools.find((t) => t.name === toolName)?.description || "N/A"}
-          - Collected inputs: ${JSON.stringify(collectedInputs)}
-          - Missing required parameters: ${missingParams.length > 0 ? missingParams.join(", ") : "None"}
-          - Next expected parameter (if any): ${missingParams.length > 0 ? missingParams[0] : "None"}
-          - Available tools:
-            ${tools.map((t) => `- ${t.name}: ${t.description}`).join("\n")}
-          - Conversation history:
-            ${conversationHistory}
-      
-          **User's Latest Message:**
-          "${lastMessage.content.replace(/"/g, '\\"')}"
-      
-          **Instructions:**
-          - If the user's message suggests a new intent (e.g., switching to a different tool or task, like "fetch all repos" instead of "fetch a file"), respond with "switch".
-          - If the user's message indicates a request to execute the current tool (e.g., "run it", "execute", "go ahead") and there are no missing parameters, respond with "execute".
-          - If the user's message aligns with the current workflow (e.g., providing a value for the next expected parameter, such as a username, repo name, or file path), respond with "continue". Note: A single word or short phrase that fits the expected parameter type (e.g., a username like "octocat" for an "owner" parameter) should be considered a "continue".
-          - If the intent is unclear (e.g., the message doesn't fit the expected parameter type or seems unrelated to the current workflow), respond with "unclear" and suggest asking the user for clarification.
-      
-          **Examples:**
-          - If the next expected parameter is "owner" and the user says "octocat", respond with "continue".
-          - If the user says "fetch all repos" while the current tool is "fetchGithubFile", respond with "switch".
-          - If the user says "execute now" and there are no missing parameters, respond with "execute".
-          - If the user says "what's the weather like?" while in the middle of a workflow, respond with "switch".
-          - If the user says "huh?" or something unrelated to the expected parameter, respond with "unclear".
-        `,
-        messages: [{ role: "user", content: "" }],
-      });
-      
-      const intentResult = contextCheck.text.trim();
-      console.log("🔹 Context check:", intentResult);
-      
-      switch (intentResult) {
-        case "switch":
-          // Reset state for new intent
-          toolName = null;
-          collectedInputs = {};
-          finished = false;
-          const switchResponse: Message = {
-            role: "assistant",
-            content: "It looks like you want to switch tasks. What would you like to do next?",
-            timestamp: Date.now(),
-            annotations: [{ type: "tool-input-state", toolName: undefined, collectedInputs: {}, finished: false }],
-          };
-          return new Response(JSON.stringify(switchResponse), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
-      
-        case "execute":
-          if (missingParams.length === 0) {
-            // Execute the tool since all parameters are collected
-            const executeResponse: Message = {
-              role: "assistant",
-              content: `Executing ${toolName} with params: ${JSON.stringify(collectedInputs)}`,
-              timestamp: Date.now(),
-              annotations: [{ type: "tool-input-state", toolName: undefined, collectedInputs: {}, finished: false }],
-            };
-            // Reset state after execution
-            toolName = null;
-            collectedInputs = {};
-            finished = false;
-            return new Response(JSON.stringify(executeResponse), {
-              status: 200,
-              headers: { "Content-Type": "application/json" },
-            });
-          }
-          break;
-      
-        case "continue":
-          // Continue collecting parameters (handled in the next step of your workflow)
-          finished = missingParams.length === 0;
-          break;
-      
-        case "unclear":
-          const unclearResponse: Message = {
-            role: "assistant",
-            content: "I'm not sure what you mean. Could you clarify your request?",
-            timestamp: Date.now(),
-            annotations: [{ type: "tool-input-state", toolName, collectedInputs, finished }],
-          };
-          return new Response(JSON.stringify(unclearResponse), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
-      
-        default:
-          // Handle unexpected intentResult values
-          console.warn(`Unexpected intentResult: ${intentResult}`);
-          const defaultResponse: Message = {
-            role: "assistant",
-            content: "I didn't understand your intent. Could you please rephrase or clarify what you'd like to do?",
-            timestamp: Date.now(),
-            annotations: [{ type: "tool-input-state", toolName, collectedInputs, finished }],
-          };
-          return new Response(JSON.stringify(defaultResponse), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
-      }
+      finished = latest.finished || false;
+      contextStatePending = latest.contextStatePending || false;
+      toolPending = latest.toolPending || null;
+      console.log("🔹 Step 2: Recovered state:", { toolName, collectedInputs, finished });
     }
 
-    // 3. If no tool intent yet, detect it
-    if (!toolName && lastMessage.role === "user") {
-      const intentDetection = await generateText({
-        model: openai("gpt-4o"),
-        temperature: 0,
-        system: `
-          You are an expert assistant mapping user requests to tools.
-          Respond ONLY with the tool name or "unknown".
-          
-          Examples:
-          - "Translate this to Spanish" → translate
-          - "Get README file from repo" → get_file
-          - "unknown task" → unknown
-          
-          Available tools:
-          ${tools.map((t) => `- ${t.name}: ${t.description}`).join("\n")}
-        `,
-        messages: [{ role: "user", content: lastMessage.content }],
-      });
-
-      toolName = intentDetection.text.trim() === "unknown" ? null : intentDetection.text.trim();
-      console.log("✅ Step 2 Intent Detected:", toolName);
-
-      if (toolName) {
-        const schema = getToolSchema(tools, toolName);
-        collectedInputs = await extractInitialParams(lastMessage.content, schema);
-      }
-    }
-
-    if (!toolName) {
-      console.log("🔹 Step 3 Tool Intent Not Deciphered");
-      return new Response(
-        JSON.stringify({ message: "❌ No suitable tool detected. Please clarify your request." }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    // 4. Get tool schema and check missing params
+    // Phase 3: Get tool schema and missing params (needed for context switch logic)
     const toolSchema = getToolSchema(tools, toolName);
-    if (!toolSchema) throw new Error(`Tool schema for ${toolName} not found`);   
+    if (toolName && !toolSchema) {
+      throw new Error(`Tool schema for ${toolName} not found`);
+    }
+    const missingParams = getMissingParams(toolSchema, collectedInputs);
+    console.log("🔹 Step 3: Missing params:", missingParams);
 
-    // 5. Update collected inputs from the latest user message (if we have prior state)
-    if (previousAnnotations.length > 0 && lastMessage.role === "user") {
+    // Phase 4: Handle context switch or confirmation
+    if (lastMessage.role === "user") {
+      if (contextStatePending) {
+        const { response, newToolName, newCollectedInputs, newFinished } =
+          await handlePendingContextSwitch(
+            lastMessage,
+            toolName,
+            toolPending,
+            collectedInputs,
+            finished,
+            missingParams
+          );
+        if (response) {
+          return new Response(JSON.stringify(response), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        toolName = newToolName;
+        collectedInputs = newCollectedInputs;
+        finished = newFinished;
+      } else {
+        const { response, newToolName, newCollectedInputs, newFinished } =
+          await handleContextSwitch(
+            lastMessage,
+            tools,
+            toolName,
+            collectedInputs,
+            finished,
+            missingParams
+          );
+        if (response) {
+          return new Response(JSON.stringify(response), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        toolName = newToolName;
+        collectedInputs = newCollectedInputs;
+        finished = newFinished;
+      }
+    }
+
+    // Phase 5: Detect tool intent if no prior state
+    if (!toolName && lastMessage.role === "user") {
+      toolName = await detectToolIntent(lastMessage.content, tools);
+      console.log("🔹 Step 4: Intent detected:", toolName);
+
+      if (!toolName) {
+        const response: Message = {
+          role: "assistant",
+          content: "❌ No suitable tool detected. Please clarify your request.",
+          timestamp: Date.now(),
+        };
+        return new Response(JSON.stringify(response), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const schema = getToolSchema(tools, toolName);
+      if (!schema) {
+        throw new Error(`Tool schema for ${toolName} not found`);
+      }
+      collectedInputs = await extractParameters(lastMessage.content, schema);
+      finished = false;
+    }
+
+    // Phase 6: Update collected inputs with new parameters
+    if (previousAnnotations.length > 0 && lastMessage.role === "user" && toolName) {
       const latestPrompt = `
         Given the current collected inputs:
         ${JSON.stringify(collectedInputs, null, 2)}
@@ -305,56 +504,55 @@ export async function POST(req: Request) {
         ${JSON.stringify(toolSchema, null, 2)}
         
         Extract any new parameters from this user message: "${lastMessage.content.replace(/"/g, '\\"')}"
-        Respond with a VALID JSON object containing only the new parameters.(e.g., {"owner": "machine"}).
-         Return ONLY the raw JSON string, with no markdown (e.g., no \`\`\`json), no extra text, and no explanations—just the JSON.
+        Respond with a VALID JSON object containing only the new parameters (e.g., {"owner": "machine"}).
+        Return ONLY the raw JSON string, with no markdown, no extra text, and no explanations.
       `;
-      const newParamsResult = await generateText({
-        model: openai("gpt-4o"),
-        temperature: 0,
-        system: latestPrompt,
-        messages: [{ role: "user", content: "Extract new parameters" }],
-      });
-
       try {
+        const newParamsResult = await generateText({
+          model: openai("gpt-4o"),
+          temperature: 0,
+          system: latestPrompt,
+          messages: [{ role: "user", content: "Extract new parameters" }],
+        });
         const newParams = JSON.parse(newParamsResult.text);
         collectedInputs = { ...collectedInputs, ...newParams };
-        console.log("🔹 Parameter check: Inputs Collected", collectedInputs);
-        
+        console.log("🔹 Step 5: Updated inputs:", collectedInputs);
       } catch (e) {
         console.error("Failed to parse new params:", e);
       }
     }
 
-    const missingParams = getMissingParams(toolSchema, collectedInputs);
-    console.log("🔹 Step 4 - State of Missing Params:", JSON.stringify(missingParams));
+    // Phase 7: Check missing parameters
+    const updatedMissingParams = getMissingParams(toolSchema, collectedInputs);
+    console.log("🔹 Step 6: Updated missing params:", updatedMissingParams);
 
-    // 7. If all params are collected, signal readiness (but don’t execute yet)
-    if (missingParams.length === 0) {
-      console.log("🔹 Step Finished - all Params collected:");
+    // Phase 8: Respond based on state
+    if (updatedMissingParams.length === 0) {
       const response: Message = {
         role: "assistant",
         content: "✅ All parameters collected. Ready to proceed.",
-        annotations: [{
-          type: "tool-input-state",
-          toolName,
-          collectedInputs,
-          finished: true,
-        }],
+        annotations: [
+          {
+            type: "tool-input-state",
+            toolName,
+            collectedInputs,
+            finished: true,
+            contextStatePending: false,
+            toolPending: null,
+          },
+        ],
         timestamp: Date.now(),
       };
-  
-      return new Response(
-        JSON.stringify(response),
-        { status: 200, headers: { "Content-Type": "application/json" } }
-      );
-      
-    }  
-   
-    // 8. Prompt user for the next missing parameter
-    const nextParam = missingParams[0];
-    const paramDescription = toolSchema.properties && toolSchema.properties[nextParam]?.description 
-      ? toolSchema.properties[nextParam].description 
-      : `the ${nextParam}`;
+      return new Response(JSON.stringify(response), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Phase 9: Prompt user for the next missing parameter
+    const nextParam = updatedMissingParams[0];
+    const paramDescription =
+      toolSchema?.properties?.[nextParam]?.description || `the ${nextParam}`;
 
     const promptResponse = await generateText({
       model: openai("gpt-4o"),
@@ -367,26 +565,29 @@ export async function POST(req: Request) {
         
         Generate a natural, concise prompt asking the user to provide the missing parameter.
       `,
-      messages: [{ role: "user", content: "" }], // placeholder
+      messages: [{ role: "user", content: "" }],
     });
 
     const response: Message = {
       role: "assistant",
       content: promptResponse.text,
-      annotations: [{
-        type: "tool-input-state",
-        toolName,
-        collectedInputs,
-        finished: false,
-      }],
+      annotations: [
+        {
+          type: "tool-input-state",
+          toolName,
+          collectedInputs,
+          finished: false,
+          contextStatePending: false,
+          toolPending: null,
+        },
+      ],
       timestamp: Date.now(),
     };
 
-    return new Response(
-      JSON.stringify(response),
-      { status: 200, headers: { "Content-Type": "application/json" } }
-    );
-
+    return new Response(JSON.stringify(response), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   } catch (error) {
     console.error("❌ Fatal error in POST handler:", error);
     const response: Message = {
@@ -394,9 +595,9 @@ export async function POST(req: Request) {
       content: error instanceof Error ? error.message : "Unknown error",
       timestamp: Date.now(),
     };
-    return new Response(
-      JSON.stringify(response),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify(response), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }
