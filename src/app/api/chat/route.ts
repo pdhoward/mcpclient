@@ -1,12 +1,8 @@
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
-import { z } from "zod";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
-import { fetchToolsAndClient } from "./helpers/fetchToolsandClient";
+import { fetchToolsAndClient } from "./helpers/fetchToolsAndClient";
 import { getToolSchema } from "./helpers/getToolSchema";
 import { getMissingParams } from "./helpers/getMissingParams";
-import { buildZodSchema } from "./helpers/buildZodSchema";
 import { extractParameters } from "./helpers/extractParameters";
 import { detectToolIntent } from "./helpers/detectToolIntent";
 import { handleContextSwitch } from "./helpers/handleContextSwitch";
@@ -35,6 +31,7 @@ export async function POST(req: Request) {
     let finished = false;
     let contextStatePending = false;
     let toolPending: string | undefined = undefined;
+    let toolSchema: any = null; // Initialize toolSchema
 
     if (previousAnnotations.length > 0) {
       const latest = previousAnnotations[previousAnnotations.length - 1];
@@ -46,11 +43,14 @@ export async function POST(req: Request) {
       console.log("🔹 Step 2: Recovered state:", { toolName, collectedInputs, finished });
     }
 
-    // Phase 3: Get tool schema and missing params (needed for context switch logic)
-    const toolSchema = getToolSchema(tools, toolName);
-    if (toolName && !toolSchema) {
-      throw new Error(`Tool schema for ${toolName} not found`);
+     // Phase 3: Get tool schema and missing params
+     if (toolName) {
+      toolSchema = getToolSchema(tools, toolName);
+      if (!toolSchema) {
+        throw new Error(`Tool schema for ${toolName} not found`);
+      }
     }
+
     const missingParams = getMissingParams(toolSchema, collectedInputs);
     console.log("🔹 Step 3: Missing params:", missingParams);
 
@@ -75,6 +75,13 @@ export async function POST(req: Request) {
         toolName = newToolName;
         collectedInputs = newCollectedInputs;
         finished = newFinished;
+         // Update toolSchema after context switch
+         if (toolName) {
+          toolSchema = getToolSchema(tools, toolName);
+          if (!toolSchema) {
+            throw new Error(`Tool schema for ${toolName} not found after context switch`);
+          }
+        }
       } else {
         const { response, newToolName, newCollectedInputs, newFinished } =
           await handleContextSwitch(
@@ -94,6 +101,13 @@ export async function POST(req: Request) {
         toolName = newToolName;
         collectedInputs = newCollectedInputs;
         finished = newFinished;
+        // Update toolSchema after context switch
+        if (toolName) {
+          toolSchema = getToolSchema(tools, toolName);
+          if (!toolSchema) {
+            throw new Error(`Tool schema for ${toolName} not found after context switch`);
+          }
+        }
       }
     }
 
@@ -114,16 +128,17 @@ export async function POST(req: Request) {
         });
       }
 
-      const schema = getToolSchema(tools, toolName);
-      if (!schema) {
+      toolSchema = getToolSchema(tools, toolName);
+      if (!toolSchema) {
         throw new Error(`Tool schema for ${toolName} not found`);
       }
-      collectedInputs = await extractParameters(lastMessage.content, schema);
+      collectedInputs = await extractParameters(lastMessage.content, toolSchema);
       finished = false;
+      console.log("🔹 Step 5: Initial inputs:", collectedInputs);
     }
 
     // Phase 6: Update collected inputs with new parameters
-    if (previousAnnotations.length > 0 && lastMessage.role === "user" && toolName) {
+    if (previousAnnotations.length > 0 && lastMessage.role === "user" && toolName && toolSchema) {
       const latestPrompt = `
         Given the current collected inputs:
         ${JSON.stringify(collectedInputs, null, 2)}
@@ -144,16 +159,23 @@ export async function POST(req: Request) {
         });
         const newParams = JSON.parse(newParamsResult.text);
         collectedInputs = { ...collectedInputs, ...newParams };
-        console.log("🔹 Step 5: Updated inputs:", collectedInputs);
+        console.log("🔹 Step 6: Updated inputs:", collectedInputs);
       } catch (e) {
         console.error("Failed to parse new params:", e);
       }
     }
 
+   
     // Phase 7: Check missing parameters
+    if (!toolSchema && toolName) {
+      toolSchema = getToolSchema(tools, toolName);
+      if (!toolSchema) {
+        throw new Error(`Tool schema for ${toolName} not found in parameter check`);
+      }
+    }
     const updatedMissingParams = getMissingParams(toolSchema, collectedInputs);
-    console.log("🔹 Step 6: Updated missing params:", updatedMissingParams);
-    console.log("🔹 Step 6 Continued: toolschema and inputs collected", toolSchema, collectedInputs);
+    console.log("🔹 Step 7: Updated missing params:", updatedMissingParams);
+    console.log("🔹 Step 7 Continued: toolschema and inputs collected", toolSchema, collectedInputs);
 
     // Phase 8: Respond based on state
     if (updatedMissingParams.length === 0) {
@@ -185,7 +207,7 @@ export async function POST(req: Request) {
 
     const promptResponse = await generateText({
       model: openai("gpt-4o"),
-      temperature: 0.5,
+      temperature: 1.0,
       system: `
         You are a helpful assistant guiding the user to provide missing parameters.
         Current collected inputs: ${JSON.stringify(collectedInputs, null, 2)}

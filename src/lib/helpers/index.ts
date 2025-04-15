@@ -1,5 +1,15 @@
 
-import { AlertFeature } from "@/lib/types/mcp";
+interface FeatureProperties {
+  event?: string | null;
+  areaDesc?: string | null;
+  severity?: string | null;
+  status?: string | null;
+  headline?: string | null;
+}
+
+interface Feature {
+  properties: FeatureProperties;
+}
 
 
 const USER_AGENT = "weather-mcp/1.0";
@@ -23,7 +33,7 @@ export async function makeNWSRequest<T>(url: string): Promise<T | null> {
 }
 
 // Format alert data
-export function formatAlert(feature: AlertFeature): string {
+export function formatAlert(feature: Feature): string {
   const props = feature.properties;
   return [
     `Event: ${props.event || "Unknown"}`,
