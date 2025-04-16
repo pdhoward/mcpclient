@@ -32,3 +32,24 @@ export interface Tool {
       required?: string[];
     };
   }
+
+
+export interface ToolSchema {
+  type: "object";
+  properties?: Record<string, { type: string; description?: string }>;
+  required?: string[];
+}
+
+export interface State {
+  toolName: string | undefined;
+  toolSchema: ToolSchema | null;
+  collectedInputs: Record<string, any>;
+  finished: boolean;
+  contextStatePending: boolean;
+  toolPending: string | undefined;
+}
+
+export interface ToolsAndClient {
+  tools:  Array<{ name: string; schema: ToolSchema }>;
+  client: any; // Replace with actual client type if known
+}

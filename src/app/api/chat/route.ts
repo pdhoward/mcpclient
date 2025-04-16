@@ -7,44 +7,12 @@ import { extractParameters } from "./helpers/extractParameters";
 import { detectToolIntent } from "./helpers/detectToolIntent";
 import { handleContextSwitch } from "./helpers/handleContextSwitch";
 import { handlePendingContextSwitch } from "./helpers/handlePendingContextSwitch";
+import { Message, ToolSchema, State, ToolsAndClient } from "@/lib/types";
 
-// Define types
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-  timestamp: number;
-  annotations?: Annotation[];
-}
-
-interface Annotation {
-  type: string;
-  toolName?: string;
-  collectedInputs?: Record<string, any>;
-  finished?: boolean;
-  contextStatePending?: boolean;
-  toolPending?: string;
-}
-
-interface ToolSchema {
-  properties?: Record<string, { type: string; description?: string }>;
-  required?: string[];
-}
-
-interface State {
-  toolName: string | undefined;
-  toolSchema: ToolSchema | null;
-  collectedInputs: Record<string, any>;
-  finished: boolean;
-  contextStatePending: boolean;
-  toolPending: string | undefined;
-}
-
-interface ToolsAndClient {
-  tools: Record<string, ToolSchema>;
-  client: any; // Replace with actual client type if known
-}
-
-// Utility to create standardized API responses
+/*
+// Creates a standardized JSON API response with a given message and status code.
+// Used throughout the workflow to return responses to the client consistently.
+*/
 function createApiResponse(message: Message, status: number = 200): Response {
   return new Response(JSON.stringify(message), {
     status,
@@ -52,16 +20,39 @@ function createApiResponse(message: Message, status: number = 200): Response {
   });
 }
 
-// Utility for logging
+/*
+// Logs a step in the workflow with associated data for debugging and tracing.
+// Provides visibility into the state and progress of the API request processing.
+*/
 function logStep(step: string, data: any): void {
   console.log(`🔹 ${step}:`, data);
 }
+/*
+// Placeholder function to execute a tool (replace with actual implementation).
+// Calls the specified tool with collected inputs using the provided 
+// client and returns the result.
+*/
+async function callTool(
+  toolName: string,
+  inputs: Record<string, any>,
+  client: ToolsAndClient["client"]
+): Promise<string> {
+  logStep("Executing tool", { toolName, inputs });
+  // Example: Replace with actual tool execution logic
+  // return await client.executeTool(toolName, inputs);
+  return `Result from ${toolName} with inputs ${JSON.stringify(inputs)}`;
+}
 
-// Phase 1: Parse request and fetch tools
+
+/*
+// Phase 1: Parses the incoming request and fetches available tools and client.
+// Extracts the message array and last user message, validates the input, and retrieves
+// the tools and client needed for tool execution and intent detection.
+*/
 async function parseRequestAndFetchTools(req: Request): Promise<{
   messages: Message[];
   lastMessage: Message;
-  tools: ToolsAndClient["tools"];
+  tools: Array<{ name: string; inputSchema: ToolSchema }>;
   client: ToolsAndClient["client"];
 }> {
   const { messages }: { messages: Message[] } = await req.json();
@@ -71,13 +62,37 @@ async function parseRequestAndFetchTools(req: Request): Promise<{
   const lastMessage = messages[messages.length - 1];
   logStep("User Last Message", lastMessage);
 
-  const { tools, client } = await fetchToolsAndClient();
-  logStep("Step 1: Tools fetched", { toolCount: Object.keys(tools).length });
+  const { tools: rawTools, client } = await fetchToolsAndClient();
+  logStep("Raw tools from fetchToolsAndClient", rawTools);
+
+   // Validate and filter tools array
+   const tools = rawTools
+   .filter((tool, index) => {
+     if (!tool || !tool.name || !tool.inputSchema) {
+       console.warn(`Invalid tool at index ${index}:`, tool);
+       return false;
+     }
+     return true;
+   })
+   .map((tool) => ({
+     name: tool.name,
+     inputSchema: tool.inputSchema as ToolSchema,
+   }));
+
+ if (tools.length === 0) {
+   throw new Error("No valid tools available after filtering");
+ }
+
+  logStep("Step 1: Tools fetched", { toolCount: tools.length });
 
   return { messages, lastMessage, tools, client };
 }
 
-// Phase 2: Recover prior state
+/*
+// Phase 2: Recovers the prior conversation state from message annotations.
+// Retrieves the latest tool-input-state annotation to restore the current tool,
+// collected inputs, and context switch status, initializing a default state if none exists.
+*/
 function recoverState(messages: Message[]): State {
   const previousAnnotations = messages
     .flatMap((m) => m.annotations || [])
@@ -105,10 +120,14 @@ function recoverState(messages: Message[]): State {
   return state;
 }
 
-// Phase 3: Update tool schema and missing params
+/*
+// Phase 3: Updates the tool schema and identifies missing parameters.
+// Fetches the schema for the current tool (if any) and checks which required parameters
+// are still missing from the collected inputs, preparing for user prompting or tool execution.
+*/
 function updateSchemaAndParams(
   state: State,
-  tools: ToolsAndClient["tools"]
+  tools: Array<{ name: string; inputSchema: ToolSchema }>
 ): string[] {
   if (state.toolName) {
     state.toolSchema = getToolSchema(tools, state.toolName);
@@ -120,11 +139,14 @@ function updateSchemaAndParams(
   logStep("Step 3: Missing params", missingParams);
   return missingParams;
 }
-
-// Phase 4: Handle context switch
+/*
+// Phase 4: Handles context switching or confirmation for tool changes.
+// Processes user input to confirm or cancel a pending tool switch, or initiates a new
+// switch if the user requests a different tool, updating the state accordingly.
+*/
 async function handleContext(
   lastMessage: Message,
-  tools: ToolsAndClient["tools"],
+  tools: Array<{ name: string; inputSchema: ToolSchema }>,
   state: State,
   missingParams: string[]
 ): Promise<Message | null> {
@@ -164,10 +186,14 @@ async function handleContext(
   return null;
 }
 
-// Phase 5: Detect tool intent
+/*
+// Phase 5: Detects the user's tool intent and initializes the tool state.
+// Analyzes the user's message to identify the intended tool, sets up its schema and
+// initial parameters, and returns an error message if no tool is detected.
+*/
 async function detectAndInitializeTool(
   lastMessage: Message,
-  tools: ToolsAndClient["tools"],
+  tools: Array<{ name: string; inputSchema: ToolSchema }>,
   state: State
 ): Promise<Message | null> {
   if (state.toolName || lastMessage.role !== "user") return null;
@@ -194,7 +220,11 @@ async function detectAndInitializeTool(
   return null;
 }
 
-// Phase 6: Update collected inputs
+/*
+// Phase 6: Updates collected inputs with new parameters from the user's message.
+// Extracts additional parameters for the current tool based on the latest user input,
+// merging them with existing inputs to progress toward tool execution.
+*/
 async function updateCollectedInputs(
   messages: Message[],
   lastMessage: Message,
@@ -238,7 +268,11 @@ async function updateCollectedInputs(
   }
 }
 
-// Phase 7: Check missing parameters
+/*
+// Phase 7: Checks for missing parameters required by the current tool.
+// Validates the collected inputs against the tool's schema to identify any remaining
+// parameters needed before execution, throwing an error if the schema is missing.
+*/
 function checkMissingParameters(state: State): string[] {
   if (!state.toolSchema && state.toolName) {
     throw new Error(`Tool schema for ${state.toolName} not found in parameter check`);
@@ -251,8 +285,11 @@ function checkMissingParameters(state: State): string[] {
   });
   return missingParams;
 }
-
-// Phase 8 & 9: Generate response
+/*
+// Phase 8 & 9: Generates the final response based on the workflow state.
+// Returns a success message if all parameters are collected, or prompts the user for
+// the next missing parameter, including state annotations for persistence.
+*/
 async function generateResponse(state: State, missingParams: string[]): Promise<Message> {
   if (missingParams.length === 0) {
     return {
@@ -307,7 +344,11 @@ async function generateResponse(state: State, missingParams: string[]): Promise<
   };
 }
 
-// Main API handler
+/*
+// Main API handler for the POST endpoint.
+// Orchestrates a nine-phase workflow to process user messages, manage tool interactions,
+// handle context switches, and collect parameters, returning appropriate responses or errors.
+*/
 export async function POST(req: Request) {
   try {
     console.log("🟡 POST started");
