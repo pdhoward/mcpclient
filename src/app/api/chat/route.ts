@@ -290,11 +290,48 @@ function checkMissingParameters(state: State): string[] {
 // Returns a success message if all parameters are collected, or prompts the user for
 // the next missing parameter, including state annotations for persistence.
 */
-async function generateResponse(state: State, missingParams: string[]): Promise<Message> {
+async function generateResponse(
+  state: State,
+  missingParams: string[],
+  lastMessage: Message,
+  client: ToolsAndClient["client"]
+): Promise<Message> {
   if (missingParams.length === 0) {
+    // Check for execution intent in the user's last message
+    const wantsToExecute = lastMessage.content.toLowerCase().includes("execute") || 
+                          lastMessage.content.toLowerCase().includes("run");
+    
+    if (wantsToExecute && state.toolName) {
+      try {
+        const result = await callTool(state.toolName, state.collectedInputs, client);
+        return {
+          role: "assistant",
+          content: `✅ Tool ${state.toolName} executed successfully: ${result}`,
+          annotations: [
+            {
+              type: "tool-input-state",
+              toolName: state.toolName,
+              collectedInputs: state.collectedInputs,
+              finished: true,
+              contextStatePending: false,
+              toolPending: undefined,
+            },
+          ],
+          timestamp: Date.now(),
+        };
+      } catch (error) {
+        return {
+          role: "assistant",
+          content: `❌ Failed to execute tool: ${error instanceof Error ? error.message : "Unknown error"}`,
+          timestamp: Date.now(),
+        };
+      }
+    }
+
+    // If no execution intent, prompt for confirmation
     return {
       role: "assistant",
-      content: "✅ All parameters collected. Ready to proceed.",
+      content: "✅ All parameters collected. Do you want to execute the tool? (e.g., say 'execute' or 'run')",
       annotations: [
         {
           type: "tool-input-state",
@@ -309,6 +346,7 @@ async function generateResponse(state: State, missingParams: string[]): Promise<
     };
   }
 
+  // Existing logic for prompting missing parameters
   const nextParam = missingParams[0];
   const paramDescription =
     state.toolSchema?.properties?.[nextParam]?.description || `the ${nextParam}`;
@@ -343,7 +381,6 @@ async function generateResponse(state: State, missingParams: string[]): Promise<
     timestamp: Date.now(),
   };
 }
-
 /*
 // Main API handler for the POST endpoint.
 // Orchestrates a nine-phase workflow to process user messages, manage tool interactions,
@@ -381,7 +418,7 @@ export async function POST(req: Request) {
     const updatedMissingParams = checkMissingParameters(state);
 
     // Phase 8 & 9: Generate response
-    const response = await generateResponse(state, updatedMissingParams);
+    const response = await generateResponse(state, updatedMissingParams, lastMessage, client);
     return createApiResponse(response);
   } catch (error) {
     console.error("❌ Fatal error in POST handler:", error);
