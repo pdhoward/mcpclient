@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
-import { useSpeechSynthesis } from "react-speech-kit";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StopCircle } from "lucide-react";
@@ -10,73 +9,51 @@ import { StopCircle } from "lucide-react";
 interface VoiceAgentProps {
   persona: { name: string; avatar: string };
   isActive: boolean;
+  onStop: () => void;
 }
 
-const personas = [
-  {
-    name: "Thalia",
-    avatar: "https://www.datocms-assets.com/96965/1743435052-thalia.png",
-  },
-  {
-    name: "Odysseus",
-    avatar: "https://www.datocms-assets.com/96965/1743435516-odysseus.png",
-  },
-  {
-    name: "Arcas",
-    avatar: "https://www.datocms-assets.com/96965/1744230292-arcas.webp",
-  },
-  {
-    name: "Andromeda",
-    avatar: "https://www.datocms-assets.com/96965/1743434880-andromeda.png",
-  },
-];
-
-const VoiceAgent = ({ persona, isActive }: VoiceAgentProps) => {
+const VoiceAgent = ({ persona, isActive, onStop }: VoiceAgentProps) => {
   const [conversation, setConversation] = useState<
     { role: string; content: string }[]
   >([]);
-  const { transcript, resetTranscript } = useSpeechRecognition();
-  const { speak } = useSpeechSynthesis();
+  const { transcript, resetTranscript, listening } = useSpeechRecognition();
   const [isProcessing, setIsProcessing] = useState(false);
+  const isMounted = useRef(true);
+  const hasGreeted = useRef(false);
+  const lastTranscript = useRef("");
+  const speechTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [activePersona, setActivePersona] = useState<string | null>(null);
-  const [status, setStatus] = useState<string>('');
+  // Check browser support for speech synthesis
+  const speechSupported = typeof window !== "undefined" && "SpeechSynthesisUtterance" in window;
 
-  const handleAvatarClick = () => {
-    setMenuOpen(prev => !prev);
-    setActivePersona(null);
-    setStatus('');
-  };
-
-  const startConversation = async (persona: string) => {
-    setActivePersona(persona);
-    setStatus('Initializing voice agent...');
-    console.log(`Starting conversation with ${persona}`);
-    // TODO: integrate OpenAI Realtime Voice API here
-    // e.g., create a session via fetch('/api/realtime/sessions', { ... })
-    // and connect via WebSocket or WebRTC client
-    setTimeout(() => {
-      setStatus(`Connected as ${persona}. Say "Hello!"`);
-    }, 1000);
-  };
-
-  useEffect(() => {
-    if (isActive) {
-      const greeting = `Hi, I'm ${persona.name}! Do you have any questions about our product?`;
-      setConversation([{ role: "assistant", content: greeting }]);
-      speak({ text: greeting });
-      SpeechRecognition.startListening({ continuous: true });
-    }
-    return () => {
+  // Start or stop speech recognition
+  const manageSpeechRecognition = useCallback(() => {
+    if (isActive && !listening && !isProcessing && isMounted.current) {
+      console.log("Starting speech recognition");
+      SpeechRecognition.startListening({ continuous: true, language: "en-US" });
+    } else {
+      console.log("Stopping speech recognition", { isActive, listening, isProcessing });
       SpeechRecognition.stopListening();
-    };
-  }, [isActive, persona.name, speak]);
+    }
+  }, [isActive, listening, isProcessing]);
 
-  const handleStop = async () => {
+  // Speak using native SpeechSynthesis
+  const speakNative = useCallback((text: string) => {
+    if (speechSupported && isMounted.current && isActive) {
+      console.log("Speaking natively:", text);
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.onend = () => console.log("Speech ended:", text);
+      utterance.onerror = (e) => console.error("Speech error:", e);
+      window.speechSynthesis.speak(utterance);
+    }
+  }, [speechSupported, isActive]);
+
+  // Handle stopping and processing the transcript
+  const handleStop = useCallback(async () => {
+    console.log("Handling stop and process");
     SpeechRecognition.stopListening();
     setIsProcessing(true);
-    const userMessage = transcript;
+    const userMessage = lastTranscript.current.trim();
     if (userMessage) {
       const updatedConversation = [
         ...conversation,
@@ -84,6 +61,7 @@ const VoiceAgent = ({ persona, isActive }: VoiceAgentProps) => {
       ];
       setConversation(updatedConversation);
       resetTranscript();
+      lastTranscript.current = "";
 
       try {
         const response = await fetch("/api/chat", {
@@ -108,7 +86,9 @@ const VoiceAgent = ({ persona, isActive }: VoiceAgentProps) => {
           ...updatedConversation,
           { role: "assistant", content: aiResponse },
         ]);
-        speak({ text: aiResponse });
+        if (isActive && isMounted.current) {
+          speakNative(aiResponse);
+        }
       } catch (error) {
         console.error("Error with API:", error);
         const errorMessage = `Sorry, I couldn't process that. Please try again.`;
@@ -116,12 +96,91 @@ const VoiceAgent = ({ persona, isActive }: VoiceAgentProps) => {
           ...updatedConversation,
           { role: "assistant", content: errorMessage },
         ]);
-        speak({ text: errorMessage });
+        if (isActive && isMounted.current) {
+          speakNative(errorMessage);
+        }
       }
     }
     setIsProcessing(false);
-    SpeechRecognition.startListening({ continuous: true });
-  };
+    manageSpeechRecognition();
+  }, [conversation, isActive, resetTranscript, manageSpeechRecognition, speakNative, persona.name]);
+
+  // Initialize conversation
+  useEffect(() => {
+    console.log("Conversation useEffect ran", { isActive, personaName: persona.name });
+    if (isActive && !hasGreeted.current) {
+      const greeting = `Hi, I'm ${persona.name}! Do you have any questions about our product?`;
+      setConversation([{ role: "assistant", content: greeting }]);
+      hasGreeted.current = true;
+      if (speechSupported) {
+        speechTimeout.current = setTimeout(() => {
+          if (isMounted.current && isActive) {
+            speakNative(greeting);
+          }
+        }, 100);
+      }
+    } else if (!isActive) {
+      setConversation([]);
+      resetTranscript();
+      lastTranscript.current = "";
+      hasGreeted.current = false;
+    }
+
+    return () => {
+      console.log("Conversation useEffect cleanup");
+      if (speechTimeout.current) {
+        clearTimeout(speechTimeout.current);
+      }
+    };
+  }, [isActive, persona.name, speechSupported, resetTranscript, speakNative]);
+
+  // Manage speech recognition
+  useEffect(() => {
+    console.log("Speech recognition useEffect ran", { isActive, listening, isProcessing });
+    manageSpeechRecognition();
+    return () => {
+      console.log("Speech recognition useEffect cleanup");
+      SpeechRecognition.stopListening();
+    };
+  }, [manageSpeechRecognition]);
+
+  // Handle transcript updates
+  useEffect(() => {
+    if (transcript && transcript !== lastTranscript.current) {
+      console.log("Transcript updated:", transcript);
+      lastTranscript.current = transcript;
+    }
+  }, [transcript]);
+
+  // Call onStop when isActive becomes false
+  useEffect(() => {
+    if (!isActive && isMounted.current) {
+      console.log("Calling onStop due to isActive false");
+      onStop();
+    }
+  }, [isActive, onStop]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      console.log("Unmounting VoiceAgent");
+      isMounted.current = false;
+      SpeechRecognition.stopListening();
+      window.speechSynthesis.cancel();
+      if (speechTimeout.current) {
+        clearTimeout(speechTimeout.current);
+      }
+    };
+  }, []);
+
+  if (!speechSupported) {
+    return (
+      <p className="text-sm text-gray-500">
+        Your browser does not support speech synthesis.
+      </p>
+    );
+  }
 
   if (!SpeechRecognition.browserSupportsSpeechRecognition()) {
     return (
@@ -132,15 +191,13 @@ const VoiceAgent = ({ persona, isActive }: VoiceAgentProps) => {
   }
 
   return (
-    <>
-    
-    <Card className="max-h-[200px] overflow-y-auto">
+    <Card className="w-full max-h-[120px] overflow-y-auto bg-gray-900 border-gray-700">
       <CardContent className="p-2">
         {conversation.map((msg, idx) => (
-          <p key={idx} className="text-sm mb-1">
+          <p key={idx} className="text-sm mb-1 text-neutral-100">
             <strong
               className={
-                msg.role === "assistant" ? "text-blue-600" : "text-green-600"
+                msg.role === "assistant" ? "text-blue-400" : "text-green-400"
               }
             >
               {msg.role === "assistant" ? persona.name : "You"}:
@@ -148,68 +205,18 @@ const VoiceAgent = ({ persona, isActive }: VoiceAgentProps) => {
             {msg.content}
           </p>
         ))}
-        {isProcessing && <p className="text-sm text-gray-500">Processing...</p>}
+        {isProcessing && <p className="text-sm text-gray-400">Processing...</p>}
         <Button
           onClick={handleStop}
-          disabled={isProcessing}
+          disabled={isProcessing || !lastTranscript.current}
           variant="outline"
-          className="mt-2 w-full"
+          className="mt-2 w-full bg-gray-800 text-neutral-100 border-gray-600 hover:bg-gray-700"
         >
           <StopCircle className="w-4 h-4 mr-2" />
-          Stop and Process
+          {isProcessing ? "Processing..." : "Stop and Process"}
         </Button>
       </CardContent>
     </Card>
-    <div className="relative min-h-screen bg-gradient-to-b from-blue-50 to-white">
-      {/* Floating GIF button */}
-      <button
-        onClick={handleAvatarClick}
-        className="fixed bottom-5 right-5 z-50 p-2 bg-transparent animate-bounce"
-      >
-        <img
-          src="/float-avatar.gif"
-          alt="Click to talk to me"
-          className="w-20 h-20"
-        />
-      </button>
-
-      {/* Floating island menu */}
-      {menuOpen && (
-        <div className="fixed bottom-28 right-5 z-40 bg-white p-4 rounded-2xl shadow-2xl w-64">
-          <h3 className="text-lg font-bold mb-2">Choose your persona</h3>
-          <div className="flex flex-wrap gap-2">
-            {personas.map(p => (
-              <button
-                key={p.name}
-                onClick={() => startConversation(p.name)}
-                className={`flex items-center space-x-2 p-2 rounded-lg border 
-                  ${activePersona === p.name ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}
-              >
-                <img src={p.avatar} alt={p.name} className="w-8 h-8 rounded-full" />
-                <span className="font-medium">{p.name}</span>
-              </button>
-            ))}
-          </div>
-
-          {/* Status / stubbed conversation panel */}
-          {activePersona && (
-            <div className="mt-4 p-2 bg-gray-100 rounded">
-              <p className="text-sm italic">{status}</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Page content */}
-      <main className="pt-16 text-center">
-        <h1 className="text-3xl font-bold">Welcome to Your Voice Agent Demo</h1>
-        <p className="mt-2 text-gray-600">
-          Click the floating GIF in the corner to start speaking with your AI persona.
-        </p>
-      </main>
-    </div>
-    
-    </>
   );
 };
 

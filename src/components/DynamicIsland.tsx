@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
-import { Play } from "lucide-react";
+import { Play, X } from "lucide-react";
 import VoiceAgent from "./VoiceAgent";
 
 const personas = [
@@ -34,11 +34,44 @@ interface DynamicIslandProps {
 export default function DynamicIsland({ isOpen, onClose }: DynamicIslandProps) {
   const [state, setState] = useState(0); // 0: Personas, 1: Voice
   const [selectedPersona, setSelectedPersona] = useState(personas[0]);
+  const [isVoiceActive, setIsVoiceActive] = useState(false);
 
+  // Dimensions for the island states
   const dimensions = [
-    { w: 324, h: 144, r: 32 }, // Personas
-    { w: 324, h: 200, r: 32 }, // Voice
+    { w: 480, h: 144, r: 32 }, // Personas
+    { w: 480, h: 200, r: 32 }, // Voice
   ];
+
+  // Handle closing the island
+  const handleClose = useCallback(() => {
+    setIsVoiceActive(false);
+    setState(0);
+    onClose();
+  }, [onClose]);
+
+  // Handle persona selection
+  const handlePersonaSelect = useCallback((persona: typeof personas[0]) => {
+    setSelectedPersona(persona);
+    setIsVoiceActive(false); // Stop previous voice agent
+    setState(1);
+  }, []);
+
+  // Memoize onStop
+  const handleVoiceStop = useCallback(() => {
+    console.log("handleVoiceStop called");
+    setIsVoiceActive(false);
+  }, []);
+
+  // Memoize persona to ensure stability
+  const stablePersona = useMemo(() => selectedPersona, [selectedPersona]);
+
+  // Activate voice when state changes to voice mode
+  useEffect(() => {
+    if (state === 1) {
+      console.log("Setting isVoiceActive to true for state 1");
+      setIsVoiceActive(true);
+    }
+  }, [state]);
 
   return (
     <AnimatePresence>
@@ -60,35 +93,37 @@ export default function DynamicIsland({ isOpen, onClose }: DynamicIslandProps) {
               initial={{ opacity: 0, filter: "blur(4px)", y: -5 }}
               animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
               exit={{ opacity: 0, filter: "blur(4px)", y: 5 }}
-              className="flex flex-wrap gap-4 p-4 w-full justify-center"
+              className="flex gap-8 p-4 w-full justify-center items-center"
             >
               {personas.map((persona) => (
                 <Button
                   key={persona.name}
-                  onClick={() => {
-                    setSelectedPersona(persona);
-                    setState(1);
-                  }}
+                  onClick={() => handlePersonaSelect(persona)}
                   variant="ghost"
-                  className="flex flex-col items-center gap-2 text-neutral-100"
+                  className="flex flex-col items-center gap-2 text-neutral-100 relative group hover:bg-transparent hover:text-red-600"
+                  title="" // Prevent browser tooltip
+                 
                 >
                   <Image
                     src={persona.avatar}
                     alt={persona.name}
                     width={48}
                     height={48}
-                    className="rounded-full"
+                    
                   />
                   <span className="text-sm">{persona.name}</span>
+                  <span className="absolute -top-8 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-800 text-white text-xs rounded py-1 px-2">
+                    Activate
+                  </span>
                 </Button>
               ))}
               <Button
-                onClick={onClose}
+                onClick={handleClose}
                 variant="ghost"
                 size="sm"
                 className="absolute top-2 right-2 text-neutral-100"
               >
-                Close
+                <X className="w-4 h-4" />
               </Button>
             </motion.div>
           )}
@@ -99,17 +134,19 @@ export default function DynamicIsland({ isOpen, onClose }: DynamicIslandProps) {
               exit={{ opacity: 0, filter: "blur(4px)", y: 5 }}
               className="flex flex-col items-center p-4 w-full"
             >
-              <div className="flex items-center gap-2 mb-4">
-                <Image
-                  src={selectedPersona.avatar}
-                  alt={selectedPersona.name}
-                  width={36}
-                  height={36}
-                  className="rounded-full"
-                />
-                <span className="text-sm text-neutral-100">
-                  Talking to {selectedPersona.name}
-                </span>
+              <div className="flex items-center gap-2 mb-4 w-full justify-between">
+                <div className="flex items-center gap-2">
+                  <Image
+                    src={stablePersona.avatar}
+                    alt={stablePersona.name}
+                    width={36}
+                    height={36}
+                    className="rounded-full"
+                  />
+                  <span className="text-sm text-neutral-100">
+                    Talking to {stablePersona.name}
+                  </span>
+                </div>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -119,14 +156,18 @@ export default function DynamicIsland({ isOpen, onClose }: DynamicIslandProps) {
                   <Play className="w-4 h-4 rotate-180" />
                 </Button>
               </div>
-              <VoiceAgent persona={selectedPersona} isActive={true} />
+              <VoiceAgent
+                persona={stablePersona}
+                isActive={isVoiceActive}
+                onStop={handleVoiceStop}
+              />
               <Button
-                onClick={onClose}
+                onClick={handleClose}
                 variant="ghost"
                 size="sm"
                 className="absolute top-2 right-2 text-neutral-100"
               >
-                Close
+                <X className="w-4 h-4" />
               </Button>
             </motion.div>
           )}
