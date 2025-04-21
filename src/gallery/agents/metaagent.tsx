@@ -26,9 +26,13 @@ import { ToolsEducation } from '@/components/controls/tools-education';
 import { allAgentSets, defaultAgentSetKey } from '@/config/agents';
 import { AgentComponentProps, AgentConfig, SessionStatus } from '@/lib/types';
 
-function MetaAgent({ activeAgent, setActiveAgent }: AgentComponentProps) {
+interface MetaAgentProps extends AgentComponentProps {
+  voice?: string; // Add voice prop
+}
+
+function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
   // State
-  const [voice, setVoice] = useState("ash");
+  const [voiceState, setVoice] = useState(voice || "ash"); // Use passed voice as initial state
   const [selectedAgentName, setSelectedAgentName] = useState<string>("");
   const [selectedAgentConfigSet, setSelectedAgentConfigSet] = useState<AgentConfig[] | null>(null);
   const [isPTTActive, setIsPTTActive] = useState<boolean>(false);
@@ -162,6 +166,13 @@ function MetaAgent({ activeAgent, setActiveAgent }: AgentComponentProps) {
     );
   }, [isAudioPlaybackEnabled]);
 
+   // Update voice when prop changes
+   useEffect(() => {
+    if (voice) {
+      setVoice(voice);
+    }
+  }, [voice]);
+
   // Event handlers
   const onToggleConnection = () => {    
     if (sessionStatus === "CONNECTED" || sessionStatus === "CONNECTING") {
@@ -185,20 +196,20 @@ function MetaAgent({ activeAgent, setActiveAgent }: AgentComponentProps) {
   };
 
   return (
-    <main className="h-full">
+    <main className="h-full w-full">
       <motion.div 
-        className="container flex flex-col items-center justify-center mx-auto max-w-3xl my-2 sm:my-4 p-4 sm:p-12 border rounded-lg shadow-xl"
+        className="flex flex-col items-center justify-center w-full max-w-[480px] my-2 p-4 border rounded-lg shadow-xl"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-      >         
+      >               
         <motion.div 
           className="w-full max-w-md bg-card text-card-foreground rounded-xl border shadow-sm p-4 sm:p-6 space-y-3 sm:space-y-4"
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.2, duration: 0.4 }}
         >
-          <VoiceSelector value={voice} onValueChange={setVoice} />
+          <VoiceSelector value={voiceState} onValueChange={setVoice} />
           <ScenarioSelector 
             value={activeAgent.api || defaultAgentSetKey} 
             onValueChange={(value) => handleAgentChange({ target: { value } } as React.ChangeEvent<HTMLSelectElement>)} 

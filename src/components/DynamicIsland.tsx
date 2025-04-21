@@ -5,26 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import { Play, X } from "lucide-react";
-import VoiceAgent from "./VoiceAgent";
-
-const personas = [
-  {
-    name: "Thalia",
-    avatar: "https://www.datocms-assets.com/96965/1743435052-thalia.png",
-  },
-  {
-    name: "Odysseus",
-    avatar: "https://www.datocms-assets.com/96965/1743435516-odysseus.png",
-  },
-  {
-    name: "Arcas",
-    avatar: "https://www.datocms-assets.com/96965/1744230292-arcas.webp",
-  },
-  {
-    name: "Andromeda",
-    avatar: "https://www.datocms-assets.com/96965/1743434880-andromeda.png",
-  },
-];
+import MetaAgent from "@/gallery/agents/metaagent";
+import { useAgentManager } from "@/contexts/AgentManager"; // Import AgentManager context
 
 interface DynamicIslandProps {
   isOpen: boolean;
@@ -33,45 +15,49 @@ interface DynamicIslandProps {
 
 export default function DynamicIsland({ isOpen, onClose }: DynamicIslandProps) {
   const [state, setState] = useState(0); // 0: Personas, 1: Voice
-  const [selectedPersona, setSelectedPersona] = useState(personas[0]);
-  const [isVoiceActive, setIsVoiceActive] = useState(false);
+  const { agents, activeAgent, setActiveAgent } = useAgentManager();
+
+  const placeholderAvatar = "https://res.cloudinary.com/stratmachine/image/upload/v1654369119/marketweb/ai_xs4tjr.png"
+
+  // Map personas to voices
+  const voiceMap: Record<string, string> = {
+    StrategicMachines: "verse",
+    CypressResorts: "alloy",
+    Thalia: "coral",
+    Odysseus: "echo",
+    Arcas: "ember",
+    Andromeda: "ash",
+  };
 
   // Dimensions for the island states
   const dimensions = [
-    { w: 480, h: 144, r: 32 }, // Personas
-    { w: 480, h: 200, r: 32 }, // Voice
+    { w: 820, h: 144, r: 32 }, // Personas
+    { w: 480, h: 400, r: 32 }, // Voice (increased height for MetaAgent dashboard)
   ];
 
   // Handle closing the island
   const handleClose = useCallback(() => {
-    setIsVoiceActive(false);
     setState(0);
     onClose();
   }, [onClose]);
 
   // Handle persona selection
-  const handlePersonaSelect = useCallback((persona: typeof personas[0]) => {
-    setSelectedPersona(persona);
-    setIsVoiceActive(false); // Stop previous voice agent
-    setState(1);
-  }, []);
+  const handlePersonaSelect = useCallback(
+    (agent: typeof agents[0]) => {
+      console.log(`----------agent selected---------`)
+      console.log(agent)
+      setActiveAgent(agent);
+      setState(1);
+    },
+    [setActiveAgent]
+  );
 
-  // Memoize onStop
-  const handleVoiceStop = useCallback(() => {
-    console.log("handleVoiceStop called");
-    setIsVoiceActive(false);
-  }, []);
-
-  // Memoize persona to ensure stability
-  const stablePersona = useMemo(() => selectedPersona, [selectedPersona]);
-
-  // Activate voice when state changes to voice mode
+  // Set default agent on mount
   useEffect(() => {
-    if (state === 1) {
-      console.log("Setting isVoiceActive to true for state 1");
-      setIsVoiceActive(true);
+    if (agents.length > 0 && !activeAgent) {
+      setActiveAgent(agents[0]);
     }
-  }, [state]);
+  }, [agents, activeAgent, setActiveAgent]);
 
   return (
     <AnimatePresence>
@@ -95,23 +81,21 @@ export default function DynamicIsland({ isOpen, onClose }: DynamicIslandProps) {
               exit={{ opacity: 0, filter: "blur(4px)", y: 5 }}
               className="flex gap-8 p-4 w-full justify-center items-center"
             >
-              {personas.map((persona) => (
+              {agents.map((agent) => (
                 <Button
-                  key={persona.name}
-                  onClick={() => handlePersonaSelect(persona)}
+                  key={agent.id}
+                  onClick={() => handlePersonaSelect(agent)}
                   variant="ghost"
                   className="flex flex-col items-center gap-2 text-neutral-100 relative group hover:bg-transparent hover:text-red-600"
-                  title="" // Prevent browser tooltip
-                 
+                  title=""
                 >
                   <Image
-                    src={persona.avatar}
-                    alt={persona.name}
+                    src={agent.avatar || placeholderAvatar}
+                    alt={agent.name}
                     width={48}
                     height={48}
-                    
                   />
-                  <span className="text-sm">{persona.name}</span>
+                  <span className="text-sm">{agent.name}</span>
                   <span className="absolute -top-8 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-800 text-white text-xs rounded py-1 px-2">
                     Activate
                   </span>
@@ -127,24 +111,24 @@ export default function DynamicIsland({ isOpen, onClose }: DynamicIslandProps) {
               </Button>
             </motion.div>
           )}
-          {state === 1 && (
+          {state === 1 && activeAgent && (
             <motion.div
               initial={{ opacity: 0, filter: "blur(4px)", y: -5 }}
               animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
               exit={{ opacity: 0, filter: "blur(4px)", y: 5 }}
-              className="flex flex-col items-center p-4 w-full"
+              className="flex flex-col items-center p-4 w-full max-h-[400px] overflow-y-auto"
             >
               <div className="flex items-center gap-2 mb-4 w-full justify-between">
                 <div className="flex items-center gap-2">
                   <Image
-                    src={stablePersona.avatar}
-                    alt={stablePersona.name}
+                    src={activeAgent.avatar || "/placeholder.png"}
+                    alt={activeAgent.name}
                     width={36}
                     height={36}
                     className="rounded-full"
                   />
                   <span className="text-sm text-neutral-100">
-                    Talking to {stablePersona.name}
+                    Talking to {activeAgent.name}
                   </span>
                 </div>
                 <Button
@@ -156,10 +140,10 @@ export default function DynamicIsland({ isOpen, onClose }: DynamicIslandProps) {
                   <Play className="w-4 h-4 rotate-180" />
                 </Button>
               </div>
-              <VoiceAgent
-                persona={stablePersona}
-                isActive={isVoiceActive}
-                onStop={handleVoiceStop}
+              <MetaAgent
+                activeAgent={activeAgent}
+                setActiveAgent={setActiveAgent}
+                voice={voiceMap[activeAgent.name]} // Pass the mapped voice
               />
               <Button
                 onClick={handleClose}

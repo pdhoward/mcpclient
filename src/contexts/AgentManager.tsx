@@ -67,8 +67,8 @@ export function AgentManager({ children }: { children: ReactNode }) {
 
   const realtimeAgents = [
     {      
-      name: "Strategic Machines",
-      id: "000",
+      name: "StrategicMachines",
+      id: "004",
       tenantId: "Austin",
       api: "introduction", // WebRTC agent does not use a traditional API
       description: "Web Tour - Introducing the Strategic Machines Voice Agent site",
@@ -81,10 +81,11 @@ export function AgentManager({ children }: { children: ReactNode }) {
       form: "agents/components/placeholder-form",
       createdAt: new Date(),
       updatedAt: new Date(),
+      avatar: "https://res.cloudinary.com/stratmachine/image/upload/v1592332353/machine/icon-192x192_agwlh4.png"
     },
     {      
-      name: "Cypress Resorts",
-      id: "001",
+      name: "CypressResorts",
+      id: "005",
       tenantId: "Atlanta",
       api: "cypressResorts", // WebRTC agent does not use a traditional API
       description: "Intelligent interactions and agent switching at scale for any scenario.",
@@ -97,39 +98,77 @@ export function AgentManager({ children }: { children: ReactNode }) {
       form: "agents/components/placeholder-form",
       createdAt: new Date(),
       updatedAt: new Date(),
+      avatar: "https://res.cloudinary.com/stratmachine/image/upload/v1609950713/logos/sage_qzfggg.jpg"
     },
-    {      
-      name: "University Security",
+    {
+      id: "000",
+      name: "Thalia",
+      tenantId: "Austin",
+      api: "voiceAgent", // Generic API for voice agents
+      description: "A bright and conversational assistant.",
+      isActive: true,
+      configuration: {
+        specialities: ['voice', 'text streaming', 'video'],
+        capabilities: ['full text transcriptions', 'tone selection'],
+      },
+      component: "agents/metaagent",
+      form: "agents/components/placeholder-form",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      avatar: "https://www.datocms-assets.com/96965/1743435052-thalia.png",
+    },
+    {
+      id: "001",
+      name: "Odysseus",
+      tenantId: "Atlanta",
+      api: "voiceAgent",
+      description: "A deep and authoritative assistant.",
+      isActive: true,
+      configuration: {
+        specialities: ['voice', 'text streaming', 'video'],
+        capabilities: ['full text transcriptions', 'tone selection'],
+      },
+      component: "agents/metaagent",
+      form: "agents/components/placeholder-form",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      avatar: "https://www.datocms-assets.com/96965/1743435516-odysseus.png",
+    },
+    {
       id: "002",
+      name: "Arcas",
       tenantId: "Chicago",
-      api: "frontDeskAuthentication", // WebRTC agent does not use a traditional API
-      description: "Intelligent authentication at your security desk",
+      api: "voiceAgent",
+      description: "A warm and friendly assistant.",
       isActive: true,
-      configuration: { 
-        specialities: ['voice', 'text streaming', 'video', 'DTMF'],
-        capabilities: ['full text transcriptions', 'tool sets', 'tone selection']
+      configuration: {
+        specialities: ['voice', 'text streaming', 'video'],
+        capabilities: ['full text transcriptions', 'tone selection'],
       },
       component: "agents/metaagent",
       form: "agents/components/placeholder-form",
       createdAt: new Date(),
       updatedAt: new Date(),
+      avatar: "https://www.datocms-assets.com/96965/1744230292-arcas.webp",
     },
-    {      
-      name: "Altitude80",
+    {
       id: "003",
+      name: "Andromeda",
       tenantId: "Miami",
-      api: "a80modernizer", // WebRTC agent does not use a traditional API
-      description: "Modernization Agent for Legacy System analysis, exploration and updates",
+      api: "voiceAgent",
+      description: "A clear and professional assistant.",
       isActive: true,
-      configuration: { 
-        specialities: ['voice', 'text streaming', 'video', 'DTMF'],
-        capabilities: ['full text transcriptions', 'tool sets', 'tone selection']
+      configuration: {
+        specialities: ['voice', 'text streaming', 'video'],
+        capabilities: ['full text transcriptions', 'tone selection'],
       },
       component: "agents/metaagent",
       form: "agents/components/placeholder-form",
       createdAt: new Date(),
       updatedAt: new Date(),
+      avatar: "https://www.datocms-assets.com/96965/1743434880-andromeda.png",
     },
+    
    
 
   ]
@@ -162,7 +201,7 @@ export function AgentManager({ children }: { children: ReactNode }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: "message" in message.context ? message.context.message : "",
+          message: message.context && "message" in message.context ? message.context.message : "",
           agent: {
             id: activeAgent.id,
             name: activeAgent.name,
@@ -186,7 +225,7 @@ export function AgentManager({ children }: { children: ReactNode }) {
       const agentMessage: Message = {
         id: crypto.randomUUID(),
         role: "assistant",
-        timestamp: new Date(),
+        timestamp: Date.now(),
         agentId: activeAgent.id,
         context: {
           ...data.context, // Store the full context object
@@ -212,7 +251,7 @@ export function AgentManager({ children }: { children: ReactNode }) {
     const newMessage: Message = {
       id: crypto.randomUUID(),
       role: "user",
-      timestamp: new Date(),
+      timestamp: Date.now(),
       agentId: activeAgent?.id || null,
       context: {
         message: content, // Store user input in context.message
@@ -248,7 +287,7 @@ export function AgentManager({ children }: { children: ReactNode }) {
         const switchMessage: Message = {
           id: crypto.randomUUID(),
           role: "assistant",
-          timestamp: new Date(),
+          timestamp: Date.now(),
           agentId: newAgent?.id || null,
           context: {
             name: "System",

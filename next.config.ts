@@ -3,7 +3,9 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {  
     reactStrictMode: true,
     images: {
-      domains: ['www.datocms-assets.com'],
+      remotePatterns: [
+        new URL('https://www.datocms-assets.com/**'), 
+        new URL('https://res.cloudinary.com/stratmachine/**')],
     },
 };
 

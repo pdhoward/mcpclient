@@ -2,6 +2,8 @@
 
 // Message needs to be rationalized between using content (for MCP)
 export interface Message {
+    id: string;
+    agentId: string | null;
     role: "user" | "assistant" | "system";
     content?: string | undefined;
     context?: UserMessageContext | AgentResponseContext;
@@ -23,6 +25,8 @@ export interface Message {
       }
     }
   }
+
+  export type MessageStatus = "speaking" | "processing" | "done";
 
    // Structure for User Input
    export interface UserMessageContext {
@@ -142,7 +146,11 @@ export interface Agent {
   form?: string;
   api?: string;
   isActive: boolean;
-  configuration: Record<string, any> | null; // Represents JSON type
+  configuration: {
+    specialities: string[];
+    capabilities: string[];
+  };
+  avatar?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -201,6 +209,64 @@ export interface AgentConfig {
   >;
   downstreamAgents?: AgentConfig[] | { name: string; publicDescription: string }[];
 }
+
+
+export interface TranscriptItem {
+  itemId: string;
+  type: "MESSAGE" | "BREADCRUMB";
+  role?: "user" | "assistant";
+  title?: string;
+  data?: Record<string, any>;
+  expanded: boolean;
+  timestamp: string;
+  createdAtMs: number;
+  status: "IN_PROGRESS" | "DONE";
+  isHidden: boolean;
+}
+
+
+export interface LoggedEvent {
+id: number;
+direction: "client" | "server";
+expanded: boolean;
+timestamp: string;
+eventName: string;
+eventData: Record<string, any>; // can have arbitrary objects logged
+}
+
+
+export interface ToolParameterProperty {
+type: string;
+description?: string;
+enum?: string[];
+pattern?: string;
+properties?: Record<string, ToolParameterProperty>;
+required?: string[];
+additionalProperties?: boolean;
+items?: ToolParameterProperty;
+}
+
+export interface ToolParameters {
+type: string;
+properties: Record<string, ToolParameterProperty>;
+required?: string[];
+additionalProperties?: boolean;
+}
+
+export interface AgentConfig {
+name: string;
+publicDescription: string; // gives context to agent transfer tool
+instructions: string;
+tools: Tool[];
+toolLogic?: Record<
+string,
+(args: any, transcriptLogsFiltered: TranscriptItem[]) => Promise<any> | any
+>;
+downstreamAgents?: AgentConfig[] | { name: string; publicDescription: string }[];
+}
+
+export type AllAgentConfigsType = Record<string, AgentConfig[]>;
+
 
 
 

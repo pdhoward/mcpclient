@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { OrchestratorProvider } from '@/context/Orchestrator';
+import { AgentManager } from "@/contexts/AgentManager";
+import { OrchestratorProvider } from '@/contexts/Orchestrator';
+import { TranslationsProvider } from "@/contexts/translations-context"
+import { EventProvider } from "@/contexts/EventContext";
+import { TranscriptProvider } from "@/contexts/TranscriptContext";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -28,9 +32,17 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-         <OrchestratorProvider>
-          {children}
-        </OrchestratorProvider>
+      <AgentManager>
+        <TranscriptProvider>        
+          <TranslationsProvider>
+            <EventProvider>           
+              <OrchestratorProvider>
+                {children}
+              </OrchestratorProvider>
+            </EventProvider>
+          </TranslationsProvider>
+        </TranscriptProvider>        
+      </AgentManager>
       </body>
     </html>
   );

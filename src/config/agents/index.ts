@@ -1,14 +1,12 @@
 import { AllAgentConfigsType } from "@/lib/types";
-import frontDeskAuthentication from "./universitysecurity";
+
 import cypressResorts from "./cypressResorts";
 import introduction from "./strategicmachines"
-import a80modernizer from "./a80modernizer"
 
-export const allAgentSets: AllAgentConfigsType = {
-  frontDeskAuthentication,
+
+export const allAgentSets: AllAgentConfigsType = { 
   cypressResorts, 
-  introduction,
-  a80modernizer
+  introduction, 
 };
 
 export const defaultAgentSetKey = "cypressResorts";

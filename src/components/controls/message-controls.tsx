@@ -23,7 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Terminal, History } from "lucide-react";
 import { useTranslations } from "@/contexts/translations-context";
 import { useEvent } from "@/contexts/EventContext";
-import { ConversationModal } from "./modal/conversation-modal";
+import { ConversationModal } from "@/components/modal/conversation-modal";
 
 interface FilterControlsProps { 
   eventFilter: string;
