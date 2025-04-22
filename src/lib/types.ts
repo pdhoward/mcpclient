@@ -66,16 +66,38 @@ export interface ToolInputState {
     contextStatePending?: boolean;
     toolPending?: string | undefined;
   }
-  
+
+  type JSONSchemaType =
+  | "string"
+  | "number"
+  | "integer"
+  | "boolean"
+  | "object"
+  | "array";
+
+export interface JSONSchema {
+  type: JSONSchemaType;
+  description?: string;
+  enum?: string[]; // for fixed choices
+  pattern?: string; // for string regex patterns
+  properties?: Record<string, JSONSchema>;
+  required?: string[];
+  additionalProperties?: boolean;
+  items?: JSONSchema; // for arrays
+}
+
+// Tool definition
 export interface Tool {
-    name: string;
-    description?: string;
-    inputSchema: {
-      type: "object";
-      properties?: Record<string, any>;
-      required?: string[];
-    };
-  }
+  type: "function"; // assume OpenAI-compatible functions
+  name: string;
+  description?: string;
+
+  // ✅ This is used internally for your app’s own validation/UI/etc
+  inputSchema?: JSONSchema & { type: "object"; properties: Record<string, JSONSchema> };
+
+  // ✅ This is passed to OpenAI or similar APIs
+  parameters?: JSONSchema & { type: "object"; properties: Record<string, JSONSchema> };
+}
 
 export interface ToolSchema {
   type: "object";
