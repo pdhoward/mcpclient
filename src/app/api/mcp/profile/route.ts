@@ -21,6 +21,7 @@ export async function GET() {
   try {
     // List prompts
     const prompts = await client.listPrompts();
+    console.log(JSON.stringify(prompts, null, 2))
   
     // List resources
     const resources = await client.listResources();
