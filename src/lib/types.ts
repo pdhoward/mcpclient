@@ -1,5 +1,7 @@
 // types.ts
 
+import {z} from 'zod'
+
 // Message needs to be rationalized between using content (for MCP)
 export interface Message {
     id: string;
@@ -288,6 +290,36 @@ downstreamAgents?: AgentConfig[] | { name: string; publicDescription: string }[]
 }
 
 export type AllAgentConfigsType = Record<string, AgentConfig[]>;
+
+export const AgentPromptSchema = z.object({
+  agentId: z.string(),
+  name: z.string(),
+  publicDescription: z.string(),
+  instructions: z.string(),
+  downstreamAgentIds: z.array(z.string()),
+  versionTimestamp: z.string().datetime(),
+  versionId: z.string().optional(),
+  stateMachine: z
+    .array(
+      z.object({
+        id: z.string(),
+        description: z.string(),
+        instructions: z.array(z.string()),
+        examples: z.array(z.string()),
+        transitions: z.array(
+          z.object({
+            next_step: z.string(),
+            condition: z.string(),
+          })
+        ),
+      })
+    )
+    .optional(),
+});
+
+
+// Export types
+export type AgentPrompt = z.infer<typeof AgentPromptSchema>
 
 
 
