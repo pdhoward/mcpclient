@@ -4,8 +4,7 @@ import {z} from 'zod'
 
 // Message needs to be rationalized between using content (for MCP)
 export interface Message {
-    id: string;
-    agentId: string | null;
+    id: string;    
     role: "user" | "assistant" | "system";
     content?: string | undefined;
     context?: UserMessageContext | AgentResponseContext;

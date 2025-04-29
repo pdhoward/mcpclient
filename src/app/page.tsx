@@ -117,6 +117,7 @@ const ChatPage = () => {
     if (!input.trim()) return;
 
     const userMessage: Message = {
+      id: crypto.randomUUID(),
       role: "user",
       content: input,
       timestamp: Date.now(),
@@ -137,6 +138,7 @@ const ChatPage = () => {
       const data = await response.json();
 
       const assistantMessage: Message = {
+        id: data.id,
         role: "assistant",
         content: data.content,
         annotations: data.annotations || undefined,
@@ -149,6 +151,7 @@ const ChatPage = () => {
       setMessages((prev) => [
         ...prev,
         {
+          id: crypto.randomUUID(),
           role: "assistant",
           content: "Sorry, something went wrong.",
           timestamp: Date.now(),

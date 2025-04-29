@@ -1,11 +1,5 @@
 "use client";
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  ReactNode
-} from "react";
+import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { Agent, Message, UserMessageContext, AgentResponseContext } from "@/lib/types";
 
 interface AgentManagerContextType {
@@ -24,170 +18,62 @@ const saveConversation = async (messages: Message[]): Promise<void> => {
   return Promise.resolve();
 };
 
-// Fetch agents based on a random tenant
+// Fetch agents from the MCP server endpoint
 const fetchAgents = async (): Promise<Agent[]> => {
   try {
-    const tenantsRes = await fetch("/api/gettenants");
-    if (!tenantsRes.ok) throw new Error("Failed to fetch tenants");
-
-    const tenants = await tenantsRes.json();
-    if (!tenants || tenants.length === 0) throw new Error("No tenants available");
-
-    const tenantId = tenants[Math.floor(Math.random() * tenants.length)].id;
-
-    const agentsRes = await fetch("/api/getagents", {
-      method: "POST",
+    const response = await fetch("/api/mcp/agents", {
+      method: "GET",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tenantId }),
     });
 
-    if (!agentsRes.ok) throw new Error("Failed to fetch agents");
-    const { agents } = await agentsRes.json();
+    if (!response.ok) throw new Error("Failed to fetch agent profiles");
 
-    const formattedAgents = agents.map((agent: any) => ({
-      ...agent,
-      createdAt: new Date(agent.createdAt),
-      updatedAt: new Date(agent.updatedAt),
-    }));  
+    const profiles = await response.json();
 
-    return formattedAgents 
+    // Map profiles to Agent type, converting dates
+    const formattedAgents: Agent[] = profiles.map((profile: any) => ({
+      id: profile.id,
+      name: profile.name,
+      displayName: profile.displayName,
+      description: profile.description,
+      isActive: profile.active,
+      configuration: profile.configuration,
+      component: profile.component,
+      form: profile.component, // Map component to form for compatibility
+      createdAt: new Date(profile.createdAt),
+      updatedAt: new Date(profile.updatedAt),
+      avatar: profile.avatar,
+      api: profile.configuration.api || "voiceAgent", // Fallback to voiceAgent
+    }));
 
-    
+    return formattedAgents;
   } catch (error) {
     console.error("Error fetching agents:", error);
     return [];
   }
 };
 
-
 export function AgentManager({ children }: { children: ReactNode }) {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [activeAgent, setActiveAgent] = useState<Agent | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-
-  const realtimeAgents = [
-    {      
-      name: "StrategicMachines",
-      id: "004",
-      tenantId: "Austin",
-      api: "introduction", // WebRTC agent does not use a traditional API
-      description: "Web Tour - Introducing the Strategic Machines Voice Agent site",
-      isActive: true,
-      configuration: { 
-        specialities: ['voice', 'text streaming', 'video', 'DTMF'],
-        capabilities: ['full text transcriptions', 'tool sets', 'tone selection']
-      },
-      component: "agents/metaagent",
-      form: "agents/components/placeholder-form",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      avatar: "https://res.cloudinary.com/stratmachine/image/upload/v1592332353/machine/icon-192x192_agwlh4.png"
-    },
-    {      
-      name: "CypressResorts",
-      id: "005",
-      tenantId: "Atlanta",
-      api: "cypressResorts", // WebRTC agent does not use a traditional API
-      description: "Intelligent interactions and agent switching at scale for any scenario.",
-      isActive: true,
-      configuration: { 
-        specialities: ['voice', 'text streaming', 'video', 'DTMF'],
-        capabilities: ['full text transcriptions', 'tool sets', 'tone selection']
-      },
-      component: "agents/metaagent",
-      form: "agents/components/placeholder-form",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      avatar: "https://res.cloudinary.com/stratmachine/image/upload/v1609950713/logos/sage_qzfggg.jpg"
-    },
-    {
-      id: "000",
-      name: "Thalia",
-      tenantId: "Austin",
-      api: "voiceAgent", // Generic API for voice agents
-      description: "A bright and conversational assistant.",
-      isActive: true,
-      configuration: {
-        specialities: ['voice', 'text streaming', 'video'],
-        capabilities: ['full text transcriptions', 'tone selection'],
-      },
-      component: "agents/metaagent",
-      form: "agents/components/placeholder-form",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      avatar: "https://www.datocms-assets.com/96965/1743435052-thalia.png",
-    },
-    {
-      id: "001",
-      name: "Odysseus",
-      tenantId: "Atlanta",
-      api: "voiceAgent",
-      description: "A deep and authoritative assistant.",
-      isActive: true,
-      configuration: {
-        specialities: ['voice', 'text streaming', 'video'],
-        capabilities: ['full text transcriptions', 'tone selection'],
-      },
-      component: "agents/metaagent",
-      form: "agents/components/placeholder-form",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      avatar: "https://www.datocms-assets.com/96965/1743435516-odysseus.png",
-    },
-    {
-      id: "002",
-      name: "Arcas",
-      tenantId: "Chicago",
-      api: "voiceAgent",
-      description: "A warm and friendly assistant.",
-      isActive: true,
-      configuration: {
-        specialities: ['voice', 'text streaming', 'video'],
-        capabilities: ['full text transcriptions', 'tone selection'],
-      },
-      component: "agents/metaagent",
-      form: "agents/components/placeholder-form",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      avatar: "https://www.datocms-assets.com/96965/1744230292-arcas.webp",
-    },
-    {
-      id: "003",
-      name: "Andromeda",
-      tenantId: "Miami",
-      api: "voiceAgent",
-      description: "A clear and professional assistant.",
-      isActive: true,
-      configuration: {
-        specialities: ['voice', 'text streaming', 'video'],
-        capabilities: ['full text transcriptions', 'tone selection'],
-      },
-      component: "agents/metaagent",
-      form: "agents/components/placeholder-form",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      avatar: "https://www.datocms-assets.com/96965/1743434880-andromeda.png",
-    },
-    
-   
-
-  ]
 
   // Initialize conversation on mount
   useEffect(() => {
     setMessages([]);
   }, []);
 
-  // Fetch agents on mount  
+  // Fetch agents on mount
   useEffect(() => {
-    setAgents(realtimeAgents);
+    fetchAgents().then((fetchedAgents) => {
+      setAgents(fetchedAgents);
+    });
   }, []);
-  
-  
-  // default context on start - loads the metaAgent which is infrastructure for Voice Agents
+
+  // Set default agent on start
   useEffect(() => {
-    if (agents.length > 0 && !activeAgent) {     
-      const defaultAgent = realtimeAgents.find((agent) => agent.id === "001") || null;
+    if (agents.length > 0 && !activeAgent) {
+      const defaultAgent = agents.find((agent) => agent.id === "001") || null;
       setActiveAgent(defaultAgent);
     }
   }, [agents, activeAgent]);
@@ -223,12 +109,11 @@ export function AgentManager({ children }: { children: ReactNode }) {
 
       // Create an agent response message
       const agentMessage: Message = {
-        id: crypto.randomUUID(),
+        id: activeAgent.id,
         role: "assistant",
-        timestamp: Date.now(),
-        agentId: activeAgent.id,
+        timestamp: Date.now(),       
         context: {
-          ...data.context, // Store the full context object
+          ...data.context,
         },
       };
 
@@ -251,10 +136,9 @@ export function AgentManager({ children }: { children: ReactNode }) {
     const newMessage: Message = {
       id: crypto.randomUUID(),
       role: "user",
-      timestamp: Date.now(),
-      agentId: activeAgent?.id || null,
+      timestamp: Date.now(),      
       context: {
-        message: content, // Store user input in context.message
+        message: content,
       },
     };
 
@@ -283,18 +167,17 @@ export function AgentManager({ children }: { children: ReactNode }) {
         const newAgent = agents.find((a) => a.id === context.id) || null;
         setActiveAgent(newAgent);
 
-        // system generated message to note the context switch
+        // System-generated message to note the context switch
         const switchMessage: Message = {
           id: crypto.randomUUID(),
-          role: "assistant",
-          timestamp: Date.now(),
-          agentId: newAgent?.id || null,
+          role: "system",
+          timestamp: Date.now(),         
           context: {
             name: "System",
             id: "system-message",
-            confidence: 1.0, // highly confident
+            confidence: 1.0,
             message: `Switching to ${newAgent?.name} for better assistance.`,
-          } as AgentResponseContext, // expected type
+          } as AgentResponseContext,
         };
 
         const messagesWithSwitch = [...updatedMessages, switchMessage];

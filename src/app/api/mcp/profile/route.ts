@@ -18,7 +18,7 @@ async function fetchAgentPrompts(agentIds?: string[]): Promise<AgentPrompt[]> {
   });
   if (!response.ok) throw new Error("Failed to fetch agent prompts");
   const prompts = await response.json();
-  console.log("Fetched prompts:", JSON.stringify(prompts, null, 2));
+  //console.log("Fetched prompts:", JSON.stringify(prompts, null, 2));
   return prompts;
 }
 
