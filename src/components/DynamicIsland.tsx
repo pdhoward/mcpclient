@@ -1,12 +1,10 @@
-"use client";
-
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import { Play, X } from "lucide-react";
 import MetaAgent from "@/gallery/agents/metaagent";
-import { useAgentManager } from "@/contexts/AgentManager"; // Import AgentManager context
+import { useAgentManager } from "@/contexts/AgentManager";
 
 interface DynamicIslandProps {
   isOpen: boolean;
@@ -17,7 +15,7 @@ export default function DynamicIsland({ isOpen, onClose }: DynamicIslandProps) {
   const [state, setState] = useState(0); // 0: Personas, 1: Voice
   const { agents, activeAgent, setActiveAgent } = useAgentManager();
 
-  const placeholderAvatar = "https://res.cloudinary.com/stratmachine/image/upload/v1654369119/marketweb/ai_xs4tjr.png"
+  const placeholderAvatar = "https://res.cloudinary.com/stratmachine/image/upload/v1654369119/marketweb/ai_xs4tjr.png";
 
   // Map personas to voices
   const voiceMap: Record<string, string> = {
@@ -31,7 +29,7 @@ export default function DynamicIsland({ isOpen, onClose }: DynamicIslandProps) {
 
   // Dimensions for the island states
   const dimensions = [
-    { w: 820, h: 144, r: 32 }, // Personas
+    { w: 860, h: 144, r: 32 }, // Personas
     { w: 480, h: 400, r: 32 }, // Voice (increased height for MetaAgent dashboard)
   ];
 
@@ -44,8 +42,8 @@ export default function DynamicIsland({ isOpen, onClose }: DynamicIslandProps) {
   // Handle persona selection
   const handlePersonaSelect = useCallback(
     (agent: typeof agents[0]) => {
-      console.log(`----------agent selected---------`)
-      console.log(agent)
+      console.log(`----------agent selected---------`);
+      console.log(agent);
       setActiveAgent(agent);
       setState(1);
     },
@@ -79,7 +77,7 @@ export default function DynamicIsland({ isOpen, onClose }: DynamicIslandProps) {
               initial={{ opacity: 0, filter: "blur(4px)", y: -5 }}
               animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
               exit={{ opacity: 0, filter: "blur(4px)", y: 5 }}
-              className="flex gap-8 p-4 w-full justify-center items-center"
+              className="flex gap-4 p-4 w-full justify-center items-center" // Reduced gap from gap-8 to gap-4
             >
               {agents.map((agent) => (
                 <Button
@@ -105,9 +103,9 @@ export default function DynamicIsland({ isOpen, onClose }: DynamicIslandProps) {
                 onClick={handleClose}
                 variant="ghost"
                 size="sm"
-                className="absolute top-2 right-2 text-neutral-100"
+                className="text-red-600 font-bold" // Made 'X' red and bold
               >
-                <X className="w-4 h-4" />
+                <X className="w-6 h-6" /> {/* Increased size for visibility */}
               </Button>
             </motion.div>
           )}
@@ -143,13 +141,13 @@ export default function DynamicIsland({ isOpen, onClose }: DynamicIslandProps) {
               <MetaAgent
                 activeAgent={activeAgent}
                 setActiveAgent={setActiveAgent}
-                voice={voiceMap[activeAgent.name]} // Pass the mapped voice
+                voice={voiceMap[activeAgent.name]}
               />
               <Button
                 onClick={handleClose}
                 variant="ghost"
                 size="sm"
-                className="absolute top-2 right-2 text-neutral-100"
+                className="absolute top-2 right-2 text-red-600 font-bold" // Made 'X' red and bold
               >
                 <X className="w-4 h-4" />
               </Button>
