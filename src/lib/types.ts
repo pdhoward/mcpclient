@@ -294,26 +294,9 @@ export const AgentPromptSchema = z.object({
   agentId: z.string(),
   name: z.string(),
   publicDescription: z.string(),
-  instructions: z.string(),
-  downstreamAgentIds: z.array(z.string()),
+  instructions: z.string(),  
   versionTimestamp: z.string().datetime(),
-  versionId: z.string().optional(),
-  stateMachine: z
-    .array(
-      z.object({
-        id: z.string(),
-        description: z.string(),
-        instructions: z.array(z.string()),
-        examples: z.array(z.string()),
-        transitions: z.array(
-          z.object({
-            next_step: z.string(),
-            condition: z.string(),
-          })
-        ),
-      })
-    )
-    .optional(),
+  versionId: z.string().optional(), 
 });
 
 
