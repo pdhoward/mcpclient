@@ -4,7 +4,7 @@ import backgroundAgent from './backgroundAgent';
 import celebrateAgent from './celebrateAgent';
 import clipboardAgent from './clipboardAgent';
 import fetchSiteAgent from './fetchSiteAgent';
-import { injectTransferTools } from '../utils';
+import { injectTransferTools } from '@/lib/utils';
 
 introduce.downstreamAgents = [
     timeAgent, 
