@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 
+const origin = "https://chaotic.ngrok.io"
+
 export async function GET() {
   try {
-    const url = 'https://chaotic.ngrok.io/agents';    
+    const url = `${origin}/agents`;    
 
     // Attach the header with your client ID to the fetch request.
     const res = await fetch(url, {

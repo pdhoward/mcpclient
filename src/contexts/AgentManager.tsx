@@ -70,20 +70,20 @@ export function AgentManager({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // Set default agent on start
+  // Set default agent on start - CYPRESS RESORTS
   useEffect(() => {
     if (agents.length > 0 && !activeAgent) {
-      const defaultAgent = agents.find((agent) => agent.id === "001") || null;
+      const defaultAgent = agents.find((agent) => agent.id === "005") || null;
       setActiveAgent(defaultAgent);
     }
   }, [agents, activeAgent]);
 
   // Function to send a message to the agent's API
   const sendMessageToAgentAPI = async (message: Message) => {
-    if (!activeAgent || !activeAgent.api) return;
+    if (!activeAgent || !activeAgent.configuration.api) return;
 
     try {
-      const response = await fetch(activeAgent.api, {
+      const response = await fetch(activeAgent.configuration.api, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

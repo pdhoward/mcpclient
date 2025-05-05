@@ -3,7 +3,7 @@ import introduction from "./strategicmachines"
 
 async function fetchAgents(): Promise<AgentConfig[]> {
   try {
-    const response = await fetch("/api/agents", {
+    const response = await fetch("/api/mcp/agents", {
       method: "GET",
       headers: { "Content-Type": "application/json" },
     });

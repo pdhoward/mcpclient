@@ -14,7 +14,7 @@ interface DynamicIslandProps {
 export default function DynamicIsland({ isOpen, onClose }: DynamicIslandProps) {
   const [state, setState] = useState(0); // 0: Personas, 1: Voice
   const { agents, activeAgent, setActiveAgent } = useAgentManager();
-
+ 
   const placeholderAvatar = "https://res.cloudinary.com/stratmachine/image/upload/v1654369119/marketweb/ai_xs4tjr.png";
 
   // Map personas to voices

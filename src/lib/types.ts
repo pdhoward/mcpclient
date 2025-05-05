@@ -119,61 +119,27 @@ export interface ToolsAndClient {
   tools:  Array<{ name: string; schema: ToolSchema }>;
   client: any; // Replace with actual client type if known
 }
-//////////////////////////////////////////////
-
-// Base types for Agent relationships
-export interface Tenant {
-  id: string;
-  // Add other tenant fields as needed
-}
-
-export interface AgentAction {
-  id: string;
-  // Add other action fields as needed
-}
-
-export interface AgentState {
-  id: string;
-  // Add other state fields as needed
-}
-
-export interface CompletedAction {
-  id: string;
-  // Add other completed action fields as needed
-}
-
-export interface AgentStack {
-  id: string;
-  // Add other stack fields as needed
-}
-
-export interface LogEvent {
-  id: string;
-  // Add other log event fields as needed
-}
 
 
 // Main Agent type definition
 export interface Agent {
   id: string;
   name: string;
-  description: string | null;
-  tenantId: string;
-  tenant?: Tenant;
-  agentActions?: AgentAction[];
-  agentStates?: AgentState[];
-  completedActions?: CompletedAction[];
-  agentStacks?: AgentStack[];
-  logEvents?: LogEvent[];
-  component?: string;
-  form?: string;
-  api?: string;
+  displayName: string | null;
+  provider: string; 
+  description: string; 
+  logo: string;
+  avatar: string;
   isActive: boolean;
+  categories: string[];
+  downstreamAgentIds: string[];
   configuration: {
     specialities: string[];
     capabilities: string[];
+    api: string;
   };
-  avatar?: string;
+  visibility: string;
+  component: string;
   createdAt: Date;
   updatedAt: Date;
 }
