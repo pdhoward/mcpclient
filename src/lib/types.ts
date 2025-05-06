@@ -140,6 +140,7 @@ export interface Agent {
   };
   visibility: string;
   component: string;
+  voice?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -266,8 +267,96 @@ export const AgentPromptSchema = z.object({
 });
 
 
+export const StateMachineStepSchema = z
+  .object({
+    id: z.string(),
+    description: z.string(),
+    instructions: z.array(z.string()),
+    examples: z.array(z.string()),
+    transitions: z.array(
+      z.object({
+        next_step: z.string(),
+        condition: z.string(),
+      })
+    ),
+  })
+  
+
+// Subscription schema for pricing and terms
+const SubscriptionSchema = z.object({
+  price: z.number().nonnegative().describe("Price in USD (e.g., 10 for $10/month, 0.01 for $0.01/call)"),
+  currency: z.string().default("USD").describe("Currency code (e.g., USD, EUR)"),
+  terms: z.enum(["flat_rate", "usage_based", "freemium"]).describe("Pricing model"),
+  interval: z
+    .enum(["monthly", "yearly", "per_use"])
+    .optional()
+    .describe("Billing interval for flat_rate (e.g., monthly, yearly) or per_use for usage_based"),
+  usageLimits: z
+    .object({
+      calls: z.number().nonnegative().optional().describe("Max API calls (e.g., 100 calls/month)"),
+      minutes: z.number().nonnegative().optional().describe("Max voice minutes (e.g., 500 minutes/month)"),
+    })
+    .optional()
+    .describe("Usage limits for freemium or usage_based models"),
+  trialPeriod: z
+    .number()
+    .nonnegative()
+    .optional()
+    .describe("Trial period in days (e.g., 14 for 14-day free trial)"),
+});
+
+// Security schema for API authentication
+const SecuritySchemeSchema = z.object({
+  type: z.enum(["oauth2", "api_key"]).describe("Authentication type"),
+  location: z.enum(["header", "query"]).describe("Where the credential is sent (e.g., header, query)"),
+  name: z.string().describe("Header or query parameter name (e.g., Authorization)"),
+  prefix: z.string().optional().describe("Prefix for the credential (e.g., Bearer)"),
+  client_id: z.string().optional().describe("OAuth2 client ID"),
+  client_secret: z.string().optional().describe("OAuth2 client secret"),
+  scope: z.string().optional().describe("OAuth2 scopes"),
+  authorize_url: z.string().url().optional().describe("OAuth2 authorization URL"),
+  access_token_url: z.string().url().optional().describe("OAuth2 access token URL"),
+  refresh_token_url: z.string().url().optional().describe("OAuth2 refresh token URL"),
+});
+
+export const AgentProfileSchema = z.object({
+  id: z.string().describe("Unique identifier for the agent (e.g., modifications)"),
+  name: z.string().describe("Assigned name for UI (e.g., Modification)"),
+  displayName: z.string().describe("Human-readable name for UI (e.g., Modification Agent)"),
+  provider: z.string().describe("Entity providing the agent (e.g., YourCompany)"),
+  version: z.string().describe("Agent version (e.g., 1.0.0)"),
+  description: z.string().describe("Detailed description of the agent’s purpose and capabilities"),
+  logo: z.string().url().describe("URL to the business logo or icon"),
+  avatar: z.string().url().describe("URL to the agent’s avatar image"),
+  categories: z.array(z.string()).describe("Tags for classification (e.g., Customer Service, Voice Agent)"),
+  visibility: z.enum(["public", "private", "tenant"]).describe("Access level (public, private, or tenant-specific)"),
+  active: z.boolean().describe("Whether the agent is active"), 
+  downstreamAgentIds: z.array(z.string()).describe("IDs of agents that can be routed to after this agent"), 
+  configuration: z
+    .object({
+      specialities: z.array(z.string()).describe("Agent specializations (e.g., voice, text streaming)"),
+      capabilities: z.array(z.string()).describe("Agent capabilities (e.g., full text transcriptions)"),
+      api: z.string().describe("path/to/ui for the active agent. May be a chat widget, form, chart etc"),
+    })
+    .describe("Agent configuration details"),
+  securitySchemes: z
+    .record(SecuritySchemeSchema)
+    .optional()
+    .describe("Authentication schemes for OpenAI Realtime API or other integrations"),
+  subscription: SubscriptionSchema.optional().describe("Pricing and terms for agent access"),
+  voice: z.string().optional().describe("Voice prop for the agent or service"),
+  component: z.string().describe("Path to the UI component that is the principal interface - chat widget, form, report or audio etc (e.g., agents/components/placeholder-form)"),
+  createdAt: z.date().describe("Creation timestamp"),
+  updatedAt: z.date().describe("Last update timestamp"),
+});
+
+
 // Export types
+export type AgentProfile = z.infer<typeof AgentProfileSchema>;
 export type AgentPrompt = z.infer<typeof AgentPromptSchema>
+export type StateMachineStep = z.infer<typeof StateMachineStepSchema>
+
+
 
 
 

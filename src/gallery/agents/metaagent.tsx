@@ -1,3 +1,4 @@
+"use client"
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 
@@ -110,13 +111,13 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
 
   // Initialize agent configuration
   useEffect(() => {
-    let finalAgentConfig = activeAgent.api || defaultAgentSetKey;
+    let finalAgentConfig = activeAgent.configuration.api || defaultAgentSetKey;
     const agents = allAgentSets[finalAgentConfig];
     const agentKeyToUse = agents[0]?.name || "";
 
     setSelectedAgentName(agentKeyToUse);
     setSelectedAgentConfigSet(agents);
-  }, [activeAgent.api]);
+  }, [activeAgent.configuration.api]);
 
   // Connect to realtime when agent is selected
   useEffect(() => {
@@ -183,7 +184,13 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
   };
 
   const handleAgentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setActiveAgent({ ...activeAgent, api: e.target.value });
+    setActiveAgent({
+      ...activeAgent,
+      configuration: {
+        ...activeAgent.configuration,
+        api: e.target.value,
+      },
+    });
   };
 
   const handleSelectedAgentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -211,7 +218,7 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
         >
           <VoiceSelector value={voiceState} onValueChange={setVoice} />
           <ScenarioSelector 
-            value={activeAgent.api || defaultAgentSetKey} 
+            value={activeAgent.configuration.api || defaultAgentSetKey} 
             onValueChange={(value) => handleAgentChange({ target: { value } } as React.ChangeEvent<HTMLSelectElement>)} 
           />
           {selectedAgentConfigSet && (

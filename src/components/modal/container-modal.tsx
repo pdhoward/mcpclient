@@ -3,7 +3,6 @@ import { useAgentManager } from '@/contexts/AgentManager';
 import dynamic from "next/dynamic";
 import { Agent, AgentComponentProps } from '@/lib/types';
 import Loading from "@/components/Loading"
-import { ChevronDown, BarChart4, FileText, LineChart, Menu, X, Workflow } from 'lucide-react';
 
 
 type DynamicAgentComponent = React.ComponentType<AgentComponentProps>;

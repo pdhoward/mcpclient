@@ -1,14 +1,11 @@
 "use client";
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { Agent, Message, UserMessageContext, AgentResponseContext } from "@/lib/types";
+import { Agent, Message } from "@/lib/types";
 
 interface AgentManagerContextType {
   agents: Agent[];
-  activeAgent: Agent | null;
-  messages: Message[];
-  setActiveAgent: (agent: Agent | null) => void;
-  handleUserMessage: (message: string) => Promise<void>;
-  clearConversation: () => void;
+  activeAgent: Agent | null;  
+  setActiveAgent: (agent: Agent | null) => void;   
 }
 
 const AgentManagerContext = createContext<AgentManagerContextType | undefined>(undefined);
@@ -78,122 +75,8 @@ export function AgentManager({ children }: { children: ReactNode }) {
     }
   }, [agents, activeAgent]);
 
-  // Function to send a message to the agent's API
-  const sendMessageToAgentAPI = async (message: Message) => {
-    if (!activeAgent || !activeAgent.configuration.api) return;
-
-    try {
-      const response = await fetch(activeAgent.configuration.api, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: message.context && "message" in message.context ? message.context.message : "",
-          agent: {
-            id: activeAgent.id,
-            name: activeAgent.name,
-            description: activeAgent.description,
-            configuration: activeAgent.configuration,
-          },
-          conversationHistory: messages.slice(-10),
-        }),
-      });
-
-      if (!response.ok) throw new Error("Agent API request failed");
-
-      const data = await response.json();
-
-      if (!data.context || !data.context.message) {
-        console.warn("Agent API response missing context or response field.");
-        return;
-      }
-
-      // Create an agent response message
-      const agentMessage: Message = {
-        id: activeAgent.id,
-        role: "assistant",
-        timestamp: Date.now(),       
-        context: {
-          ...data.context,
-        },
-      };
-
-      // Update messages state
-      setMessages((prev) => [...prev, agentMessage]);
-
-      // Persist conversation
-      await saveConversation([...messages, agentMessage]);
-
-      return data.context;
-    } catch (error) {
-      console.error("Error sending message to agent API:", error);
-    }
-  };
-
-  // Handle user messages and context switching
-  const handleUserMessage = async (content: string) => {
-    if (!content.trim()) return;
-
-    const newMessage: Message = {
-      id: crypto.randomUUID(),
-      role: "user",
-      timestamp: Date.now(),      
-      context: {
-        message: content,
-      },
-    };
-
-    // Update messages state
-    const updatedMessages = [...messages, newMessage];
-    setMessages(updatedMessages);
-
-    try {
-      await saveConversation(updatedMessages);
-
-      // Check for agent switch
-      const res = await fetch("/api/context-switch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: content,
-          currentAgentId: activeAgent?.id,
-          agents,
-          conversationHistory: updatedMessages.slice(-5),
-        }),
-      });
-
-      const { context } = await res.json();
-
-      if (context.id && context.id !== activeAgent?.id) {
-        const newAgent = agents.find((a) => a.id === context.id) || null;
-        setActiveAgent(newAgent);
-
-        // System-generated message to note the context switch
-        const switchMessage: Message = {
-          id: crypto.randomUUID(),
-          role: "system",
-          timestamp: Date.now(),         
-          context: {
-            name: "System",
-            id: "system-message",
-            confidence: 1.0,
-            message: `Switching to ${newAgent?.name} for better assistance.`,
-          } as AgentResponseContext,
-        };
-
-        const messagesWithSwitch = [...updatedMessages, switchMessage];
-        setMessages(messagesWithSwitch);
-
-        await saveConversation(messagesWithSwitch);
-
-        await sendMessageToAgentAPI(switchMessage);
-      } else {
-        await sendMessageToAgentAPI(newMessage);
-      }
-    } catch (error) {
-      console.error("Error handling user message:", error);
-    }
-  };
-
+ 
+ 
   const clearConversation = () => {
     setMessages([]);
     setActiveAgent(null);
@@ -201,11 +84,8 @@ export function AgentManager({ children }: { children: ReactNode }) {
 
   const value: AgentManagerContextType = {
     agents,
-    activeAgent,
-    messages,
-    setActiveAgent,
-    handleUserMessage,
-    clearConversation,
+    activeAgent,   
+    setActiveAgent,      
   };
 
   return (

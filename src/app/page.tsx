@@ -6,6 +6,8 @@ import Loading from "@/components/Loading";
 import { Message } from "@/lib/types";
 import ActivateButton from "@/components/Activate";
 import DynamicIsland from "@/components/DynamicIsland";
+import { ViewContainer } from "@/components/modal/container-modal";
+import { useAgentManager } from "@/contexts/AgentManager";
 
 interface StoredServer {
   id: string;
@@ -38,6 +40,7 @@ interface MCPData {
 }
 
 const ChatPage = () => {
+  const { agents, activeAgent, setActiveAgent } = useAgentManager();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [data, setData] = useState<MCPData | null>(null);
@@ -65,11 +68,11 @@ const ChatPage = () => {
   const [echoResult, setEchoResult] = useState("");
   const [alerts, setAlerts] = useState("");
 
+  // returns tool data from server
   useEffect(() => {
     fetch("/api/mcp/profile")
       .then((res) => res.json())
-      .then((json) => {
-        console.log("MCP Profile Data:", json);
+      .then((json) => {      
         setData(json);
         setLoading(false);
       })
@@ -181,6 +184,11 @@ const ChatPage = () => {
           <div className="relative w-108 h-20 ">
             <ActivateButton onClick={() => setIsIslandOpen(true)} />
           </div>
+          {activeAgent && (
+            <div className="w-full max-w-2xl mt-8">
+              <ViewContainer />
+            </div>
+          )}
 
           {/* MCP Server Tools - Collapsible Section */}
           <div className="w-full max-w-2xl p-4 border rounded-lg bg-gray-800 shadow-md">

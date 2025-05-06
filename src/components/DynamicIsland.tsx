@@ -1,9 +1,8 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useEffect, useCallback} from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
-import { Play, X } from "lucide-react";
-import MetaAgent from "@/gallery/agents/metaagent";
+import { X } from "lucide-react";
 import { useAgentManager } from "@/contexts/AgentManager";
 
 interface DynamicIslandProps {
@@ -11,8 +10,7 @@ interface DynamicIslandProps {
   onClose: () => void;
 }
 
-export default function DynamicIsland({ isOpen, onClose }: DynamicIslandProps) {
-  const [state, setState] = useState(0); // 0: Personas, 1: Voice
+export default function DynamicIsland({ isOpen, onClose }: DynamicIslandProps) {  
   const { agents, activeAgent, setActiveAgent } = useAgentManager();
  
   const placeholderAvatar = "https://res.cloudinary.com/stratmachine/image/upload/v1654369119/marketweb/ai_xs4tjr.png";
@@ -34,20 +32,18 @@ export default function DynamicIsland({ isOpen, onClose }: DynamicIslandProps) {
   ];
 
   // Handle closing the island
-  const handleClose = useCallback(() => {
-    setState(0);
+  const handleClose = useCallback(() => {   
     onClose();
   }, [onClose]);
 
   // Handle persona selection
-  const handlePersonaSelect = useCallback(
+  const handleAgentSelect = useCallback(
     (agent: typeof agents[0]) => {
       console.log(`----------agent selected---------`);
       console.log(agent);
-      setActiveAgent(agent);
-      setState(1);
-    },
-    [setActiveAgent]
+      setActiveAgent(agent);  
+      onClose(); // Close the island after selection    
+    },[setActiveAgent]
   );
 
   // Set default agent on mount
@@ -63,16 +59,16 @@ export default function DynamicIsland({ isOpen, onClose }: DynamicIslandProps) {
         <motion.div
           initial={{ width: 100, height: 28, borderRadius: 28, opacity: 0 }}
           animate={{
-            width: dimensions[state].w,
-            height: dimensions[state].h,
-            borderRadius: dimensions[state].r,
+            width: 860,
+            height: 144,
+            borderRadius: 32,
             opacity: 1,
           }}
           exit={{ width: 100, height: 28, borderRadius: 28, opacity: 0 }}
           transition={{ type: "spring", bounce: 0.3 }}
           className="fixed top-6 left-1/2 -translate-x-1/2 bg-black rounded-[32px] shadow-lg flex items-center justify-center overflow-hidden z-50"
         >
-          {state === 0 && (
+       
             <motion.div
               initial={{ opacity: 0, filter: "blur(4px)", y: -5 }}
               animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
@@ -82,7 +78,7 @@ export default function DynamicIsland({ isOpen, onClose }: DynamicIslandProps) {
               {agents.map((agent) => (
                 <Button
                   key={agent.id}
-                  onClick={() => handlePersonaSelect(agent)}
+                  onClick={() => handleAgentSelect(agent)}
                   variant="ghost"
                   className="flex flex-col items-center gap-2 text-neutral-100 relative group hover:bg-transparent hover:text-red-600"
                   title=""
@@ -107,52 +103,8 @@ export default function DynamicIsland({ isOpen, onClose }: DynamicIslandProps) {
               >
                 <X className="w-6 h-6" /> {/* Increased size for visibility */}
               </Button>
-            </motion.div>
-          )}
-          {state === 1 && activeAgent && (
-            <motion.div
-              initial={{ opacity: 0, filter: "blur(4px)", y: -5 }}
-              animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
-              exit={{ opacity: 0, filter: "blur(4px)", y: 5 }}
-              className="flex flex-col items-center p-4 w-full max-h-[400px] overflow-y-auto"
-            >
-              <div className="flex items-center gap-2 mb-4 w-full justify-between">
-                <div className="flex items-center gap-2">
-                  <Image
-                    src={activeAgent.avatar || "/placeholder.png"}
-                    alt={activeAgent.name}
-                    width={36}
-                    height={36}
-                    className="rounded-full"
-                  />
-                  <span className="text-sm text-neutral-100">
-                    Talking to {activeAgent.name}
-                  </span>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setState(0)}
-                  className="text-neutral-100"
-                >
-                  <Play className="w-4 h-4 rotate-180" />
-                </Button>
-              </div>
-              <MetaAgent
-                activeAgent={activeAgent}
-                setActiveAgent={setActiveAgent}
-                voice={voiceMap[activeAgent.name]}
-              />
-              <Button
-                onClick={handleClose}
-                variant="ghost"
-                size="sm"
-                className="absolute top-2 right-2 text-red-600 font-bold" // Made 'X' red and bold
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </motion.div>
-          )}
+            </motion.div>   
+        
         </motion.div>
       )}
     </AnimatePresence>
