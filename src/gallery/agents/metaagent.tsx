@@ -24,11 +24,26 @@ import { StatusDisplay } from '@/components/controls/status';
 import { ToolsEducation } from '@/components/controls/tools-education';
 
 // Configuration and types
-import { allAgentSets, defaultAgentSetKey } from '@/config/agents';
+
 import { AgentComponentProps, AgentConfig, SessionStatus } from '@/lib/types';
 
 interface MetaAgentProps extends AgentComponentProps {
   voice?: string; // Add voice prop
+}
+
+async function fetchAgentConfig(agent: string): Promise<AgentConfig[]> {
+  try {
+    const response = await fetch(`/api/mcp/agentconfigurator?api=${encodeURIComponent(agent)}`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!response.ok) throw new Error("Failed to fetch agent config");
+    const data = await response.json();
+    return data.agents;
+  } catch (error) {
+    console.error("Error fetching agent config:", error);
+    return [];
+  }
 }
 
 function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
@@ -101,23 +116,31 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
     setSelectedAgentName,
   });
 
+  // add event listener which also cleans up events
   useEffect(() => {
     if (dataChannel) {
-      dataChannel.addEventListener("message", (e: MessageEvent) => {        
+      const handleMessage = (e: MessageEvent) => {
         handleServerEventRef.current(JSON.parse(e.data));
-      });
+      };
+      dataChannel.addEventListener("message", handleMessage);
+      return () => dataChannel.removeEventListener("message", handleMessage);
     }
   }, [dataChannel]);
 
-  // Initialize agent configuration
-  useEffect(() => {
-    let finalAgentConfig = activeAgent.configuration.api || defaultAgentSetKey;
-    const agents = allAgentSets[finalAgentConfig];
-    const agentKeyToUse = agents[0]?.name || "";
-
-    setSelectedAgentName(agentKeyToUse);
-    setSelectedAgentConfigSet(agents);
-  }, [activeAgent.configuration.api]);
+   // Fetch agent configuration when activeAgent changes
+   useEffect(() => {
+    if (activeAgent?.name) {
+      fetchAgentConfig(activeAgent.name).then((agents) => {
+        console.log("Fetched agent config:", agents);
+        const agentKeyToUse = agents[0]?.name || "";
+        setSelectedAgentName(agentKeyToUse);
+        setSelectedAgentConfigSet(agents);
+      });
+    } else {
+      setSelectedAgentName("");
+      setSelectedAgentConfigSet(null);
+    }
+  }, [activeAgent?.name]);
 
   // Connect to realtime when agent is selected
   useEffect(() => {
@@ -218,7 +241,7 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
         >
           <VoiceSelector value={voiceState} onValueChange={setVoice} />
           <ScenarioSelector 
-            value={activeAgent.configuration.api || defaultAgentSetKey} 
+            value={activeAgent.name } 
             onValueChange={(value) => handleAgentChange({ target: { value } } as React.ChangeEvent<HTMLSelectElement>)} 
           />
           {selectedAgentConfigSet && (
