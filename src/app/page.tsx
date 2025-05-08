@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { CloudSun, ChevronDown, ChevronUp } from "lucide-react";
 import Loading from "@/components/Loading";
-import { Message } from "@/lib/types";
+import { Message, Agent } from "@/lib/types";
 import ActivateButton from "@/components/Activate";
 import DynamicIsland from "@/components/DynamicIsland";
 import { ViewContainer } from "@/components/modal/container-modal";
@@ -48,23 +48,11 @@ const ChatPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [toolsVisible, setToolsVisible] = useState(false);
   const [isIslandOpen, setIsIslandOpen] = useState(false);
+  // Track if an agent was explicitly selected
+  const [isAgentSelected, setIsAgentSelected] = useState(false);
 
-  // MCP Server State
-  const [serverUrl, setServerUrl] = useState("");
-  const [serverStatus, setServerStatus] = useState<
-    "idle" | "connecting" | "connected" | "failed"
-  >("idle");
-  const [connectedServers, setConnectedServers] = useState<StoredServer[]>([]);
-  const [selectedServer, setSelectedServer] = useState<string | null>(null);
-  const [serverTools, setServerTools] = useState<Tool[]>([]);
-  const [selectedTool, setSelectedTool] = useState<string | null>(null);
-  const [toolArgs, setToolArgs] = useState<string>("");
-  const [toolResult, setToolResult] = useState<any>(null);
-
-  // API Call Inputs
-  const [echoMessage, setEchoMessage] = useState("Hello MCP!");
-  const [stateCode, setStateCode] = useState("");
-  const [cityName, setCityName] = useState("");
+  // MCP Server State  
+  const [echoMessage, setEchoMessage] = useState("Hello MCP!"); 
   const [echoResult, setEchoResult] = useState("");
   const [alerts, setAlerts] = useState("");
 
@@ -170,13 +158,24 @@ const ChatPage = () => {
     setInput("");
   };
 
+  // Handle agent selection from DynamicIsland
+  const handleAgentSelect = (agent: Agent) => {
+    setActiveAgent(agent);
+    setIsAgentSelected(true); // Mark agent as explicitly selected
+    setIsIslandOpen(false); // Close DynamicIsland
+  };
+
   if (loading) {
     return <Loading />;
   }
 
   return (
     <div className="min-h-screen bg-black flex flex-col">
-      <DynamicIsland isOpen={isIslandOpen} onClose={() => setIsIslandOpen(false)} />
+      <DynamicIsland
+        isOpen={isIslandOpen}
+        onClose={() => setIsIslandOpen(false)}
+        onAgentSelect={handleAgentSelect} // Pass callback to DynamicIsland
+      />
       <div className="container mx-auto px-4 py-16 flex-grow">
         <div className="flex flex-col items-center justify-center text-center space-y-8">
           <CloudSun className="h-20 w-20 text-sky-400" />
@@ -184,7 +183,8 @@ const ChatPage = () => {
           <div className="relative w-108 h-20 ">
             <ActivateButton onClick={() => setIsIslandOpen(true)} />
           </div>
-          {activeAgent && (
+           {/* Render ViewContainer only if an agent is explicitly selected */}
+           {activeAgent && isAgentSelected && (
             <div className="w-full max-w-2xl mt-8">
               <ViewContainer />
             </div>

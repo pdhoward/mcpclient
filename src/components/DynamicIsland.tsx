@@ -4,14 +4,16 @@ import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import { X } from "lucide-react";
 import { useAgentManager } from "@/contexts/AgentManager";
+import { Agent } from "@/lib/types";
 
 interface DynamicIslandProps {
   isOpen: boolean;
   onClose: () => void;
+  onAgentSelect: (agent: Agent) => void;
 }
 
-export default function DynamicIsland({ isOpen, onClose }: DynamicIslandProps) {  
-  const { agents, activeAgent, setActiveAgent } = useAgentManager();
+export default function DynamicIsland({ isOpen, onClose, onAgentSelect }: DynamicIslandProps) {  
+  const { agents, activeAgent, setActiveAgent } = useAgentManager();  
  
   const placeholderAvatar = "https://res.cloudinary.com/stratmachine/image/upload/v1654369119/marketweb/ai_xs4tjr.png";
 
@@ -36,15 +38,11 @@ export default function DynamicIsland({ isOpen, onClose }: DynamicIslandProps) {
     onClose();
   }, [onClose]);
 
-  // Handle persona selection
-  const handleAgentSelect = useCallback(
-    (agent: typeof agents[0]) => {
-      console.log(`----------agent selected---------`);
-      console.log(agent);
-      setActiveAgent(agent);  
-      onClose(); // Close the island after selection    
-    },[setActiveAgent]
-  );
+  // Handle agent selection
+  const handleAgentSelect = (agent: Agent) => {
+    onAgentSelect(agent); // set activeAgent and isAgentSelected
+    onClose(); 
+  };
 
   // Set default agent on mount
   useEffect(() => {
@@ -75,7 +73,10 @@ export default function DynamicIsland({ isOpen, onClose }: DynamicIslandProps) {
               exit={{ opacity: 0, filter: "blur(4px)", y: 5 }}
               className="flex gap-4 p-4 w-full justify-center items-center" // Reduced gap from gap-8 to gap-4
             >
-              {agents.map((agent) => (
+              {agents.length === 0 ? (
+              <p className="text-neutral-400">No agents available</p>
+            ) : (
+              agents.map((agent) => (
                 <Button
                   key={agent.id}
                   onClick={() => handleAgentSelect(agent)}
@@ -94,7 +95,8 @@ export default function DynamicIsland({ isOpen, onClose }: DynamicIslandProps) {
                     Activate
                   </span>
                 </Button>
-              ))}
+              ))
+            )}
               <Button
                 onClick={handleClose}
                 variant="ghost"

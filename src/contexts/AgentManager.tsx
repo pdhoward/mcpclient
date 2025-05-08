@@ -53,12 +53,8 @@ const fetchAgents = async (): Promise<Agent[]> => {
 export function AgentManager({ children }: { children: ReactNode }) {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [activeAgent, setActiveAgent] = useState<Agent | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  
 
-  // Initialize conversation on mount
-  useEffect(() => {
-    setMessages([]);
-  }, []);
 
   // Fetch agents on mount
   useEffect(() => {
@@ -66,21 +62,7 @@ export function AgentManager({ children }: { children: ReactNode }) {
       setAgents(fetchedAgents);
     });
   }, []);
-
-  // Set default agent on start - CYPRESS RESORTS
-  useEffect(() => {
-    if (agents.length > 0 && !activeAgent) {
-      const defaultAgent = agents.find((agent) => agent.id === "005") || null;
-      setActiveAgent(defaultAgent);
-    }
-  }, [agents, activeAgent]);
-
  
- 
-  const clearConversation = () => {
-    setMessages([]);
-    setActiveAgent(null);
-  };
 
   const value: AgentManagerContextType = {
     agents,
