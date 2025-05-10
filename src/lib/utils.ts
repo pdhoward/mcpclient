@@ -134,4 +134,3 @@ export function injectTransferTools(agentDefs: AgentConfig[]): AgentConfig[] {
 
   return agentDefs;
 }
-

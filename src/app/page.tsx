@@ -1,13 +1,14 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import { CloudSun, ChevronDown, ChevronUp } from "lucide-react";
-import Loading from "@/components/Loading";
-import { Message, Agent } from "@/lib/types";
-import ActivateButton from "@/components/Activate";
-import DynamicIsland from "@/components/DynamicIsland";
-import { ViewContainer } from "@/components/modal/container-modal";
-import { useAgentManager } from "@/contexts/AgentManager";
+import { useState, useEffect } from 'react';
+import { CloudSun, ChevronDown, ChevronUp } from 'lucide-react';
+import Loading from '@/components/Loading';
+import { Message, Agent } from '@/lib/types';
+import ActivateButton from '@/components/Activate';
+import DynamicIsland from '@/components/DynamicIsland';
+import IPhoneModal from '@/components/modal/iphone-modal';
+import MetaAgent from '@/gallery/agents/metaagent';
+import { useAgentManager } from '@/contexts/AgentManager';
 
 interface StoredServer {
   id: string;
@@ -42,30 +43,32 @@ interface MCPData {
 const ChatPage = () => {
   const { agents, activeAgent, setActiveAgent } = useAgentManager();
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState('');
   const [data, setData] = useState<MCPData | null>(null);
   const [loading, setLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [toolsVisible, setToolsVisible] = useState(false);
   const [isIslandOpen, setIsIslandOpen] = useState(false);
-  // Track if an agent was explicitly selected
   const [isAgentSelected, setIsAgentSelected] = useState(false);
+  const [isCallActive, setIsCallActive] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [showTranscription, setShowTranscription] = useState(true);
 
-  // MCP Server State  
-  const [echoMessage, setEchoMessage] = useState("Hello MCP!"); 
-  const [echoResult, setEchoResult] = useState("");
-  const [alerts, setAlerts] = useState("");
+  // MCP Server State
+  const [echoMessage, setEchoMessage] = useState('Hello MCP!');
+  const [echoResult, setEchoResult] = useState('');
+  const [alerts, setAlerts] = useState('');
 
-  // returns tool data from server
+  // Fetch tool data from server
   useEffect(() => {
-    fetch("/api/mcp/profile")
+    fetch('/api/mcp/profile')
       .then((res) => res.json())
-      .then((json) => {      
+      .then((json) => {
         setData(json);
         setLoading(false);
       })
       .catch((err) => {
-        console.error("MCP Profile Error:", err);
+        console.error('MCP Profile Error:', err);
         setLoading(false);
       });
   }, []);
@@ -73,16 +76,16 @@ const ChatPage = () => {
   const executeToolCall = async (toolName: string, input: Record<string, any>) => {
     setLoading(true);
     try {
-      const response = await fetch("/api/mcp/calltool", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const response = await fetch('/api/mcp/calltool', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ toolName, input }),
       });
       const result = await response.json();
-      setEchoResult(result.content?.[0]?.text || "No response");
+      setEchoResult(result.content?.[0]?.text || 'No response');
     } catch (err) {
-      console.error("Tool Call Error:", err);
-      setEchoResult("Error executing tool");
+      console.error('Tool Call Error:', err);
+      setEchoResult('Error executing tool');
     }
     setLoading(false);
   };
@@ -90,15 +93,15 @@ const ChatPage = () => {
   const executeHealthCheck = async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/mcp/health", {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
+      const response = await fetch('/api/mcp/health', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
       });
       const result = await response.json();
-      setAlerts(result.health || "No response");
+      setAlerts(result.health || 'No response');
     } catch (err) {
-      console.error("Health Check Error:", err);
-      setAlerts("Error checking health");
+      console.error('Health Check Error:', err);
+      setAlerts('Error checking health');
     }
     setLoading(false);
   };
@@ -114,17 +117,17 @@ const ChatPage = () => {
       timestamp: Date.now(),
     };
     setMessages((prev) => [...prev, userMessage]);
-    setInput("");
+    setInput('');
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: [...messages, userMessage] }),
       });
 
-      if (!response.ok) throw new Error("Failed to fetch response");
+      if (!response.ok) throw new Error('Failed to fetch response');
 
       const data = await response.json();
 
@@ -138,8 +141,8 @@ const ChatPage = () => {
 
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
-      console.error("Chat Error:", error);
-      setMessages((prev) => [
+      console.error('Chat Error:', error);
+       setMessages((prev) => [
         ...prev,
         {
           id: crypto.randomUUID(),
@@ -155,14 +158,44 @@ const ChatPage = () => {
 
   const handleReset = () => {
     setMessages([]);
-    setInput("");
+    setInput('');
   };
 
   // Handle agent selection from DynamicIsland
   const handleAgentSelect = (agent: Agent) => {
     setActiveAgent(agent);
-    setIsAgentSelected(true); // Mark agent as explicitly selected
-    setIsIslandOpen(false); // Close DynamicIsland
+    setIsAgentSelected(true);
+    setIsIslandOpen(false);
+  };
+
+  // Reset agent selection when closing the iPhone modal
+  const handleCloseIPhoneModal = () => {
+    setActiveAgent(null);
+    setIsAgentSelected(false);
+    setIsCallActive(false);
+    setIsMuted(false);
+    setShowTranscription(true);
+  };
+
+  // Call control handlers
+  const handleStartCall = () => {
+    setIsCallActive(true);
+  };
+
+  const handleEndCall = () => {
+    setIsCallActive(false);
+  };
+
+  const handleMute = () => {
+    setIsMuted(!isMuted);
+  };
+
+  const handleSendText = (text: string) => {
+    // Handle text submission if needed
+  };
+
+  const handleToggleTranscription = () => {
+    setShowTranscription(!showTranscription);
   };
 
   if (loading) {
@@ -171,24 +204,46 @@ const ChatPage = () => {
 
   return (
     <div className="min-h-screen bg-black flex flex-col">
+      {/* Main Page Dynamic Island for Agent Selection */}
       <DynamicIsland
         isOpen={isIslandOpen}
         onClose={() => setIsIslandOpen(false)}
-        onAgentSelect={handleAgentSelect} // Pass callback to DynamicIsland
+        onAgentSelect={handleAgentSelect}
       />
       <div className="container mx-auto px-4 py-16 flex-grow">
         <div className="flex flex-col items-center justify-center text-center space-y-8">
           <CloudSun className="h-20 w-20 text-sky-400" />
           <h1 className="text-4xl font-bold text-white">MCP Control Panel</h1>
-          <div className="relative w-108 h-20 ">
+          <div className="relative w-108 h-20">
             <ActivateButton onClick={() => setIsIslandOpen(true)} />
           </div>
-           {/* Render ViewContainer only if an agent is explicitly selected */}
-           {activeAgent && isAgentSelected && (
-            <div className="w-full max-w-2xl mt-8">
-              <ViewContainer />
-            </div>
-          )}
+
+          {/* Render iPhone Modal with MetaAgent when an agent is selected */}
+          <IPhoneModal
+            isOpen={isAgentSelected && !!activeAgent}
+            onClose={handleCloseIPhoneModal}
+            onStartCall={handleStartCall}
+            onEndCall={handleEndCall}
+            onMute={handleMute}
+            isMuted={isMuted}
+            isCallActive={isCallActive}
+            onSendText={handleSendText}
+            onToggleTranscription={handleToggleTranscription}
+            showTranscription={showTranscription}
+          >
+            {activeAgent && (
+              <MetaAgent
+                activeAgent={activeAgent}
+                setActiveAgent={setActiveAgent}
+                voice="ash"
+                onStartCall={handleStartCall}
+                onEndCall={handleEndCall}
+                onMute={handleMute}
+                onSendText={handleSendText}
+                onToggleTranscription={handleToggleTranscription}
+              />
+            )}
+          </IPhoneModal>
 
           {/* MCP Server Tools - Collapsible Section */}
           <div className="w-full max-w-2xl p-4 border rounded-lg bg-gray-800 shadow-md">
@@ -234,11 +289,11 @@ const ChatPage = () => {
                   placeholder="Enter message..."
                 />
                 <button
-                  onClick={() => executeToolCall("translate", { text: echoMessage })}
+                  onClick={() => executeToolCall('translate', { text: echoMessage })}
                   className="mt-3 w-full bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-blue-300"
                   disabled={loading}
                 >
-                  {loading ? "Running..." : "Run Translate"}
+                  {loading ? 'Running...' : 'Run Translate'}
                 </button>
                 {echoResult && (
                   <p className="mt-3 p-3 bg-gray-700 rounded text-gray-200">
@@ -255,7 +310,7 @@ const ChatPage = () => {
                   className="mt-3 w-full bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-blue-300"
                   disabled={loading}
                 >
-                  {loading ? "Running..." : "Check Health"}
+                  {loading ? 'Running...' : 'Check Health'}
                 </button>
                 {alerts && (
                   <p className="mt-3 p-3 bg-gray-700 rounded text-gray-200">
@@ -279,13 +334,13 @@ const ChatPage = () => {
                   <div
                     key={idx}
                     className={`mb-2 p-2 rounded-md ${
-                      msg.role === "user"
-                        ? "bg-blue-600 text-white ml-auto max-w-[80%]"
-                        : "bg-gray-700 text-gray-200 mr-auto max-w-[80%]"
+                      msg.role === 'user'
+                        ? 'bg-blue-600 text-white ml-auto max-w-[80%]'
+                        : 'bg-gray-700 text-gray-200 mr-auto max-w-[80%]'
                     }`}
                   >
-                    {msg.content}
-                    {msg.role === "assistant" &&
+                    {msg.content ?? 'No message content'}
+                    {msg.role === 'assistant' &&
                       msg.annotations?.some((a) => a.finished) && (
                         <div className="mt-2">
                           <p className="font-semibold text-gray-300">Collected Parameters:</p>
@@ -320,7 +375,7 @@ const ChatPage = () => {
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300"
                 disabled={isLoading}
               >
-                {isLoading ? "Sending..." : "Send"}
+                {isLoading ? 'Sending...' : 'Send'}
               </button>
             </form>
             <button
