@@ -1,8 +1,17 @@
-import { NextResponse, NextRequest } from 'next/server';
-import { AgentConfig, AgentProfile, AgentPrompt, StateMachineStep } from "@/lib/types";
+
+import { 
+  AgentConfig, 
+  AgentProfile, 
+  AgentPrompt, 
+  StateMachineStep,  
+  LibraryToolArraySchema,
+  LibraryTool, Tool
+} from "@/lib/types";
 import { injectTransferTools } from "@/lib/utils";
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
+
+import { z } from 'zod';
 
 const origin = 'https://chaotic.ngrok.io';
 
@@ -37,26 +46,128 @@ async function fetchStateMachines(agentIds?: string[]): Promise<{ agentId: strin
   return stateMachinesArray;
 }
 
+// Utility function to convert parameters to a Zod schema
+function parametersToZodSchema(parameters: Record<string, { type: string; description?: string; required?: boolean; enum?: string[]; minimum?: number; maximum?: number }>): z.ZodType<any> {
+  const properties: Record<string, z.ZodType<any>> = {};
+
+  for (const [key, param] of Object.entries(parameters)) {
+    let schema: z.ZodType<any>;
+
+    switch (param.type) {
+      case 'string':
+        schema = z.string();
+        if (param.enum) {
+          schema = z.enum(param.enum as [string, ...string[]]);
+        }
+        break;
+      case 'number':
+        schema = z.number();
+        if (param.minimum !== undefined) {
+          schema = (schema as z.ZodNumber).min(param.minimum);
+        }
+        if (param.maximum !== undefined) {
+          schema = (schema as z.ZodNumber).max(param.maximum);
+        }
+        break;
+      case 'boolean':
+        schema = z.boolean();
+        break;
+      case 'object':
+        schema = z.object({});
+        break;
+      default:
+        schema = z.any();
+    }
+
+    if (param.required !== false) {
+      properties[key] = schema;
+    } else {
+      properties[key] = schema.optional();
+    }
+  }
+
+  return z.object(properties);
+}
+
+// Create a persistent Client instance
+let clientInstance: Client<any, any, any> | null = null;
+
+async function getClient(): Promise<Client<any, any, any>> {
+  if (clientInstance) {
+    return clientInstance;
+  }
+
+  const transport = new SSEClientTransport(new URL(`${origin}/sse`));
+  const client = new Client(
+    { name: 'CypressResorts', version: '1.0.0' },
+    { capabilities: { prompts: {}, resources: {}, tools: {} } }
+  );
+
+  // Listen for SSE disconnection
+  transport.onclose = () => {
+    console.error("SSE connection lost. Clearing client instance...");
+    clientInstance = null; // Reset the client instance on disconnect
+  };
+
+  await client.connect(transport);
+  clientInstance = client;
+  return client;
+}
+
 export async function GET() {  
   console.log(`--------configurator start------`);
 
-  const transport = new SSEClientTransport(new URL(`${origin}/sse`));  
-  const client = new Client({ name: 'mcpmachine', version: '1.0.0' });
- 
-  await client.connect(transport); 
+  let client;
+  try {
+    client = await getClient();
+  } catch (error) {
+    console.error('Failed to connect to MCP server:', error);
+    return new Response(
+      JSON.stringify({ error: 'Failed to connect to MCP server' }),
+      { status: 500 }
+    );
+  }
+
   try {
     // Fetch the profiles of active agents
     const profiles = await fetchAgentProfiles();
     const agentIds = profiles.map((p: { name: string }) => p.name);  
 
     // Fetch prompts
-    const promptArray = await client.listPrompts();
+    const promptArray = await client.listPrompts() as { prompts: AgentPrompt[] };
     // Fetch state machines
-    const stateMachines = await fetchStateMachines();  
+    const stateMachines: { agentId: string; stateMachine: StateMachineStep[] }[] = await fetchStateMachines();  
     // Fetch resources
     const resources = await client.listResources();  
-    // Fetch tools
-    const tools = await client.listTools();  
+    // Fetch tools and validate them
+    const rawTools = await client.listTools();
+    const validatedTools = LibraryToolArraySchema.parse(rawTools);
+    const libraryTools: LibraryTool[] = validatedTools;
+    const tools: Tool[] = libraryTools.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      schema: parametersToZodSchema(tool.parameters),
+      handler: async (params: any) => {
+        try {
+          const result = await client.callTool({
+            name: tool.name,
+            arguments: params,
+          });
+          return result; // Return the result directly, as it's already in the format { content: [{ type: "text", text: string }] }
+        } catch (error) {
+          console.error(`Error executing tool ${tool.name}:`, error);
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
+              },
+            ],
+          };
+        }
+      },
+      parameters: tool.parameters, // Add parameters for compatibility with agentTools mapping
+    }));
 
     // Assemble AgentConfig for each agent with a profile
     const configs: AgentConfig[] = profiles.map((profile: AgentProfile) => {
@@ -64,51 +175,27 @@ export async function GET() {
       console.log(promptArray);
 
       // Access the prompts array inside promptArray
-      const prompt = promptArray.prompts.find((p: any) => p.name === profile.name);
+      const prompt = promptArray.prompts.find((p) => p.name === profile.name);
       const stateMachineData = stateMachines.find((sm) => sm.agentId === profile.name);
 
-      const agentTools = tools
-        .filter((tool) => tool.agentId === profile.id)
-        .map((tool) => ({
-          type: "function",
-          name: tool.name,
-          description: tool.description,
-          parameters: {
-            type: "object",
-            properties: Object.fromEntries(
-              Object.entries(tool.parameters).map(([key, value]: [string, any]) => [
-                key,
-                {
-                  type: value.type,
-                  description: value.description,
-                  ...(value.enum ? { enum: value.enum } : {}),
-                  ...(value.minimum ? { minimum: value.minimum } : {}),
-                  ...(value.maximum ? { maximum: view.maximum } : {}),
-                ],
-              ])
-            ),
-            required: Object.keys(tool.parameters).filter(
-              (key) => tool.parameters[key].required !== false
-            ),
-            additionalProperties: false,
-          },
-        }));
-  
+      // Filter the tools for this agent (already in the correct Tool format)
+      const agentTools = tools.filter((tool) => tool.name === profile.name);      
+
       const stateMachineString = stateMachineData?.stateMachine
         ? `\n# Conversation States\n${JSON.stringify(stateMachineData.stateMachine, null, 2)}`
         : "";
-  
+
       const instructionsWithStateMachine = `${prompt?.instructions || ""}${stateMachineString}`;
-  
+
       const downstreamAgents = (profile.downstreamAgentIds || [])
-        .map((id: any) => {
+        .map((id: string) => {
           const downstreamProfile = profiles.find((p) => p.id === id);
           return downstreamProfile
-            ? { name: downstreamProfile.name, publicDescription: downstreamProfile.publicDescription }
+            ? { name: downstreamProfile.name, publicDescription: downstreamProfile.description }
             : null;
         })
-        .filter((agent: any): agent is { name: string; publicDescription: string } => agent !== null);
-  
+        .filter((agent): agent is { name: string; publicDescription: string } => agent !== null);
+
       return {
         name: profile.name,
         publicDescription: profile.description,

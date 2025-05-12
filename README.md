@@ -21,3 +21,7 @@ Then go to `http://localhost:3000`
 ### INSPECT
 
 npx @modelcontextprotocol/inspector
+
+### RESEARCH
+
+https://component-playground-eight.vercel.app/

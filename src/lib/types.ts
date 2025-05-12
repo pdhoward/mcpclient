@@ -87,38 +87,6 @@ export interface JSONSchema {
   items?: JSONSchema; // for arrays
 }
 
-// Tool definition
-export interface Tool {
-  type: "function"; // assume OpenAI-compatible functions
-  name: string;
-  description?: string;
-
-  // ✅ This is used internally for your app’s own validation/UI/etc
-  inputSchema?: JSONSchema & { type: "object"; properties: Record<string, JSONSchema> };
-
-  // ✅ This is passed to OpenAI or similar APIs
-  parameters?: JSONSchema & { type: "object"; properties: Record<string, JSONSchema> };
-}
-
-export interface ToolSchema {
-  type: "object";
-  properties?: Record<string, { type: string; description?: string }>;
-  required?: string[];
-}
-
-export interface State {
-  toolName: string | undefined;
-  toolSchema: ToolSchema | null;
-  collectedInputs: Record<string, any>;
-  finished: boolean;
-  contextStatePending: boolean;
-  toolPending: string | undefined;
-}
-
-export interface ToolsAndClient {
-  tools:  Array<{ name: string; schema: ToolSchema }>;
-  client: any; // Replace with actual client type if known
-}
 
 
 // Main Agent type definition
@@ -175,17 +143,6 @@ eventData: Record<string, any>; // can have arbitrary objects logged
 
 export type SessionStatus = "DISCONNECTED" | "CONNECTING" | "CONNECTED";
 
-export interface AgentConfig {
-  name: string;
-  publicDescription: string; // gives context to agent transfer tool
-  instructions: string;
-  tools: Tool[];
-  toolLogic?: Record<
-    string,
-    (args: any, transcriptLogsFiltered: TranscriptItem[]) => Promise<any> | any
-  >;
-  downstreamAgents?: AgentConfig[] | { name: string; publicDescription: string }[];
-}
 
 
 export interface TranscriptItem {
@@ -337,11 +294,39 @@ export const AgentProfileSchema = z.object({
   updatedAt: z.date().describe("Last update timestamp"),
 });
 
+// tool definition expected by OPENAI LIVE
+export interface Tool {
+  name: string;
+  description: string;
+  schema: z.ZodType<any>;
+  handler: (params: any) => Promise<any>;
+}
+
+// tool definition for MCP Server 
+export const LibraryToolSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+  parameters: z.record(
+    z.object({
+      type: z.string(),
+      description: z.string().optional(),
+      required: z.boolean().optional(),
+      enum: z.array(z.string()).optional(),
+      minimum: z.number().optional(),
+      maximum: z.number().optional(),
+    })
+  ),
+});
+
+// Define the array schema
+export const LibraryToolArraySchema = z.array(LibraryToolSchema);
+
 
 // Export types
 export type AgentProfile = z.infer<typeof AgentProfileSchema>;
 export type AgentPrompt = z.infer<typeof AgentPromptSchema>
 export type StateMachineStep = z.infer<typeof StateMachineStepSchema>
+export type LibraryTool = z.infer<typeof LibraryToolSchema>;
 
 
 

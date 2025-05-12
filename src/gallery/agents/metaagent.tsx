@@ -162,9 +162,24 @@ function MetaAgent({
     }
   }, [dataChannel]);
 
+  // Define fetchAgentConfig function
+async function fetchAgentConfig(agent: string): Promise<AgentConfig[]> {
+  try {
+    const response = await fetch(`/api/mcp/agentconfigurator?api=${encodeURIComponent(agent)}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!response.ok) throw new Error('Failed to fetch agent config');
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching agent config:', error);
+    return [];
+  }
+}
+
   useEffect(() => {
     if (activeAgent?.name) {
-      fetchAgentConfig(activeAgent.name).then((agents) => {
+      fetchAgentConfig(activeAgent.name).then((agents: any) => {
         const agentKeyToUse = agents[0]?.name || '';
         setSelectedAgentName(agentKeyToUse);
         setSelectedAgentConfigSet(agents);
@@ -322,7 +337,7 @@ function MetaAgent({
             </DialogHeader>
             <div className="text-sm text-neutral-400">
               {logs.length > 0 ? (
-                logs.map((log, index) => <p key={index}>{log.data?.text ?? 'No log content'}</p>)
+                logs.map((log, index) => <p key={index}>{log.content ?? 'No log content'}</p>)
               ) : (
                 <p>No logs available.</p>
               )}
