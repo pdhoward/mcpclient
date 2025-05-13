@@ -8,6 +8,9 @@ export interface Message {
     role: "user" | "assistant" | "system";
     content?: string | undefined;
     context?: UserMessageContext | AgentResponseContext;
+    type?: string;
+    text?: string;
+    isFinal?: boolean;
     annotations?: Array<{
       type: string;
       toolName?: string;
@@ -16,7 +19,7 @@ export interface Message {
       contextStatePending?: boolean,
       toolPending?: string,
     }>;
-    timestamp: number; // Unix timestamp in milliseconds
+    timestamp: number | null;  // Unix timestamp in milliseconds
     tokens?: number
     response?: {
       usage: {

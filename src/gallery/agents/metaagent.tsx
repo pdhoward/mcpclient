@@ -1,7 +1,6 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import WaveSurfer from 'wavesurfer.js';
 import IPhoneModal from '@/components/modal/iphone-modal';
 
 // Hooks
@@ -22,14 +21,27 @@ interface MetaAgentProps extends AgentComponentProps {
 
 async function fetchAgentConfig(agent: string): Promise<AgentConfig[]> {
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
     const response = await fetch(`/api/mcp/agentconfigurator?api=${encodeURIComponent(agent)}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
     });
-    if (!response.ok) throw new Error('Failed to fetch agent config');
-    return await response.json();
-  } catch (error) {
-    console.error('Error fetching agent config:', error);
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to fetch agent config: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log('AgentConfig fetched successfully:', JSON.stringify(data, null, 2));
+    return data;
+  } catch (error: any) {
+    console.error('Error fetching agent config:', error.message, error);
     return [];
   }
 }
@@ -49,13 +61,16 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
   const [timer, setTimer] = useState<number>(0);
 
   // Waveform
-  const waveformRef = useRef<HTMLDivElement | null>(null);
-  const wavesurferRef = useRef<WaveSurfer | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
 
   // Hooks
   const { transcriptItems } = useTranscript();
   const { logs: messageLogs, conversation } = useMappedMessages();
-  const { connectionState, dataChannel, dcRef, connectToRealtime, disconnectFromRealtime } =
+  const { connectionState, dataChannel, dcRef, connectToRealtime, disconnectFromRealtime, audioElement } =
     useSessionManager({
       selectedAgentName,
       selectedAgentConfigSet,
@@ -87,17 +102,23 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
   });
 
   // Transform messageLogs (Message[]) to TranscriptItem[]
-  const logs: TranscriptItem[] = messageLogs.map((message: Message) => ({
-    itemId: message.id,
-    type: "MESSAGE" as const,
-    role: message.role,
-    data: { text: message.content },
-    expanded: false,
-    timestamp: new Date(message.timestamp).toISOString(),
-    createdAtMs: message.timestamp,
-    status: "DONE" as const,
-    isHidden: false,
-  }));
+  const logs: TranscriptItem[] = messageLogs.map((message: Message) => {
+    const timestampValue = typeof message.timestamp === 'number' && !isNaN(message.timestamp)
+      ? message.timestamp
+      : Date.now(); // Fallback to current timestamp if invalid or null
+
+    return {
+      itemId: message.id,
+      type: "MESSAGE" as const,
+      role: message.role === 'system' ? undefined : message.role,
+      data: { text: message.content || message.text || 'No content' },
+      expanded: false,
+      timestamp: new Date(timestampValue).toISOString(),
+      createdAtMs: timestampValue,
+      status: "DONE" as const,
+      isHidden: false,
+    };
+  });
 
   // Timer Logic
   useEffect(() => {
@@ -119,47 +140,93 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  // Waveform Setup
+  // Real-Time Waveform Visualization
   useEffect(() => {
-    if (waveformRef.current && !wavesurferRef.current) {
-      wavesurferRef.current = WaveSurfer.create({
-        container: waveformRef.current,
-        waveColor: '#4CAF50',
-        progressColor: '#2A5298',
-        cursorColor: '#fff',
-        barWidth: 3,
-        barGap: 1,
-        height: 60,
-        hideScrollbar: true,
-        normalize: true,
-      });
+    if (!canvasRef.current || !audioElement) return;
 
-      wavesurferRef.current.load('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3');
+    const canvas = canvasRef.current;
+    const canvasCtx = canvas.getContext('2d');
+    if (!canvasCtx) return;
 
-      wavesurferRef.current.on('ready', () => {
-        if (sessionStatus === 'CONNECTED' && !isMuted) {
-          wavesurferRef.current?.play();
-        }
-      });
+    // Set canvas dimensions
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+
+    // Initialize Web Audio API only once
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContext();
+      analyserRef.current = audioContextRef.current.createAnalyser();
+      analyserRef.current.fftSize = 2048;
+
+      // Connect audio element to analyser
+      sourceRef.current = audioContextRef.current.createMediaElementSource(audioElement);
+      sourceRef.current.connect(analyserRef.current);
+      analyserRef.current.connect(audioContextRef.current.destination);
     }
 
+    const bufferLength = analyserRef.current!.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    const draw = () => {
+      if (!canvasCtx || !analyserRef.current) return;
+
+      analyserRef.current!.getByteTimeDomainData(dataArray);
+
+      canvasCtx.fillStyle = 'rgb(51, 65, 85)';
+      canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+      canvasCtx.lineWidth = 2;
+      canvasCtx.strokeStyle = '#4CAF50';
+      canvasCtx.beginPath();
+
+      const sliceWidth = canvas.width / bufferLength;
+      let x = 0;
+
+      for (let i = 0; i < bufferLength; i++) {
+        const v = dataArray[i] / 128.0;
+        const y = (v * canvas.height) / 2;
+
+        if (i === 0) {
+          canvasCtx.moveTo(x, y);
+        } else {
+          canvasCtx.lineTo(x, y);
+        }
+
+        x += sliceWidth;
+      }
+
+      canvasCtx.lineTo(canvas.width, canvas.height / 2);
+      canvasCtx.stroke();
+
+      animationFrameRef.current = requestAnimationFrame(draw);
+    };
+
+    draw();
+
     return () => {
-      if (wavesurferRef.current) {
-        wavesurferRef.current.destroy();
-        wavesurferRef.current = null;
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (sourceRef.current) {
+        sourceRef.current.disconnect();
+        sourceRef.current = null;
+      }
+      if (analyserRef.current) {
+        analyserRef.current.disconnect();
+        analyserRef.current = null;
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
       }
     };
-  }, [sessionStatus, isMuted]);
+  }, [audioElement]); // Only depend on audioElement
 
   // Mute/Unmute Logic
   const toggleMute = () => {
-    if (wavesurferRef.current) {
-      if (isMuted) {
-        wavesurferRef.current.play();
-      } else {
-        wavesurferRef.current.pause();
-      }
-      setIsMuted(!isMuted);
+    if (audioElement) {
+      audioElement.muted = !audioElement.muted;
+      setIsMuted(audioElement.muted);
     }
   };
 
@@ -288,9 +355,6 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
     if (sessionStatus === 'CONNECTED' || sessionStatus === 'CONNECTING') {
       console.log('Disconnecting from OpenAI Live');
       disconnectFromRealtime();
-      if (wavesurferRef.current) {
-        wavesurferRef.current.stop();
-      }
       setIsCallActive(false);
     } else {
       console.log('Connecting to OpenAI Live');
@@ -345,12 +409,10 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
         </div>
 
         {/* Waveform */}
-        <div
-          ref={waveformRef}
+        <canvas
+          ref={canvasRef}
           className="w-full h-20 rounded-lg bg-neutral-800 overflow-hidden mb-4 relative"
-        >
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-neutral-700 to-transparent opacity-30" />
-        </div>
+        />
 
         {/* Transcription Area */}
         <div className="flex-1 overflow-y-auto space-y-4 mb-4">

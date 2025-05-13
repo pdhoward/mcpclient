@@ -85,6 +85,15 @@ export function useSessionManager({
       pcRef.current = pc;
       dcRef.current = dc;
 
+      // ✅ Create remote audio stream from receivers
+      const remoteStream = new MediaStream();
+      pc.getReceivers().forEach(receiver => {
+        if (receiver.track.kind === 'audio') {
+          remoteStream.addTrack(receiver.track);
+        }
+      });
+      audioElementRef.current.srcObject = remoteStream;
+
       dc.addEventListener("open", () => {
         logClientEvent({}, "data_channel.open");
         console.log('Data channel opened, setting session to CONNECTED');
@@ -180,5 +189,6 @@ export function useSessionManager({
     dcRef,
     connectToRealtime,
     disconnectFromRealtime,
+    audioElement: audioElementRef.current, // Expose the audio element
   };
 }

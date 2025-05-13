@@ -25,3 +25,6 @@ npx @modelcontextprotocol/inspector
 ### RESEARCH
 
 https://component-playground-eight.vercel.app/
+
+project management
+https://github.com/ln-dev7/circle

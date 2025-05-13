@@ -130,18 +130,25 @@ export async function GET() {
   }
 
   try {
-    // Fetch the profiles of active agents
-    const profiles = await fetchAgentProfiles();
-    const agentIds = profiles.map((p: { name: string }) => p.name);  
+    const [profiles, promptArray, stateMachines, resources, rawToolsResponse] = await Promise.all([
+      fetchAgentProfiles(),
+      client.listPrompts() as Promise<{ prompts: AgentPrompt[] }>,
+      fetchStateMachines(),
+      client.listResources(),
+      client.listTools(),
+    ]);
+    // // Fetch the profiles of active agents
+    // const profiles = await fetchAgentProfiles();
+    // const agentIds = profiles.map((p: { name: string }) => p.name);  
 
-    // Fetch prompts
-    const promptArray = await client.listPrompts() as { prompts: AgentPrompt[] };
-    // Fetch state machines
-    const stateMachines: { agentId: string; stateMachine: StateMachineStep[] }[] = await fetchStateMachines();  
-    // Fetch resources
-    const resources = await client.listResources();  
-    // Fetch tools and validate them
-    const rawToolsResponse = await client.listTools();    
+    // // Fetch prompts
+    // const promptArray = await client.listPrompts() as { prompts: AgentPrompt[] };
+    // // Fetch state machines
+    // const stateMachines: { agentId: string; stateMachine: StateMachineStep[] }[] = await fetchStateMachines();  
+    // // Fetch resources
+    // const resources = await client.listResources();  
+    // // Fetch tools and validate them
+    // const rawToolsResponse = await client.listTools();    
     const validatedResponse = ListToolsResponseSchema.parse(rawToolsResponse);
     const libraryTools: LibraryTool[] = validatedResponse.tools;
 
