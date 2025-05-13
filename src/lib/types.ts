@@ -87,8 +87,6 @@ export interface JSONSchema {
   items?: JSONSchema; // for arrays
 }
 
-
-
 // Main Agent type definition
 export interface Agent {
   id: string;
@@ -144,21 +142,6 @@ eventData: Record<string, any>; // can have arbitrary objects logged
 export type SessionStatus = "DISCONNECTED" | "CONNECTING" | "CONNECTED";
 
 
-
-export interface TranscriptItem {
-  itemId: string;
-  type: "MESSAGE" | "BREADCRUMB";
-  role?: "user" | "assistant";
-  title?: string;
-  data?: Record<string, any>;
-  expanded: boolean;
-  timestamp: string;
-  createdAtMs: number;
-  status: "IN_PROGRESS" | "DONE";
-  isHidden: boolean;
-}
-
-
 export interface LoggedEvent {
 id: number;
 direction: "client" | "server";
@@ -191,7 +174,7 @@ export interface AgentConfig {
 name: string;
 publicDescription: string; // gives context to agent transfer tool
 instructions: string;
-tools: Tool[];
+tools: OpenAITool[];
 toolLogic?: Record<
 string,
 (args: any, transcriptLogsFiltered: TranscriptItem[]) => Promise<any> | any
@@ -294,32 +277,65 @@ export const AgentProfileSchema = z.object({
   updatedAt: z.date().describe("Last update timestamp"),
 });
 
-// tool definition expected by OPENAI LIVE
-export interface Tool {
-  name: string;
-  description: string;
-  schema: z.ZodType<any>;
-  handler: (params: any) => Promise<any>;
-}
 
-// tool definition for MCP Server 
-export const LibraryToolSchema = z.object({
-  name: z.string(),
-  description: z.string(),
-  parameters: z.record(
+
+// embedded object on LibraryToolSchema returned by mcp server
+const InputSchemaSchema = z.object({
+  type: z.literal("object"),
+  properties: z.record(
     z.object({
       type: z.string(),
       description: z.string().optional(),
-      required: z.boolean().optional(),
       enum: z.array(z.string()).optional(),
       minimum: z.number().optional(),
       maximum: z.number().optional(),
     })
   ),
+  required: z.array(z.string()).optional(),
+  additionalProperties: z.boolean().optional(),
+  $schema: z.string().optional(),
+});
+
+// tool definition for MCP Server 
+export const LibraryToolSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+  inputSchema: InputSchemaSchema,
+  agentId: z.string().optional(), // Keep agentId for filtering
 });
 
 // Define the array schema
-export const LibraryToolArraySchema = z.array(LibraryToolSchema);
+export const ListToolsResponseSchema = z.object({
+  tools: z.array(LibraryToolSchema),
+});
+
+// Tool definition for OpenAI Live API
+export interface OpenAITool {
+  type: "function";
+  name: string;
+  description: string;
+  parameters: {
+    type: "object";
+    properties: Record<string, { type: string; description?: string; enum?: string[]; minimum?: number; maximum?: number }>;
+    required: string[];
+    additionalProperties: boolean;
+  };
+}
+
+// Transcript Item (used in conversation transcripts)
+export interface TranscriptItem {
+  itemId: string;
+  type: "MESSAGE" | "BREADCRUMB";
+  role?: "user" | "assistant" | "system";
+  title?: string;
+  data?: Record<string, any>;
+  expanded: boolean;
+  timestamp: string;
+  createdAtMs: number;
+  status: "IN_PROGRESS" | "DONE";
+  isHidden: boolean;
+  agentId?: string; // Add agentId for filtering tools
+}
 
 
 // Export types

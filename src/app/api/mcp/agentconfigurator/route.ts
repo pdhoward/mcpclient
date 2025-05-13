@@ -4,8 +4,10 @@ import {
   AgentProfile, 
   AgentPrompt, 
   StateMachineStep,  
-  LibraryToolArraySchema,
-  LibraryTool, Tool
+  ListToolsResponseSchema,
+  LibraryTool,
+  OpenAITool,
+  TranscriptItem
 } from "@/lib/types";
 import { injectTransferTools } from "@/lib/utils";
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -46,11 +48,11 @@ async function fetchStateMachines(agentIds?: string[]): Promise<{ agentId: strin
   return stateMachinesArray;
 }
 
-// Utility function to convert parameters to a Zod schema
-function parametersToZodSchema(parameters: Record<string, { type: string; description?: string; required?: boolean; enum?: string[]; minimum?: number; maximum?: number }>): z.ZodType<any> {
+// Utility function to convert input schema to a Zod schema
+function inputSchemaToZodSchema(inputSchema: LibraryTool['inputSchema']): z.ZodType<any> {
   const properties: Record<string, z.ZodType<any>> = {};
 
-  for (const [key, param] of Object.entries(parameters)) {
+  for (const [key, param] of Object.entries(inputSchema.properties)) {
     let schema: z.ZodType<any>;
 
     switch (param.type) {
@@ -79,7 +81,7 @@ function parametersToZodSchema(parameters: Record<string, { type: string; descri
         schema = z.any();
     }
 
-    if (param.required !== false) {
+    if (inputSchema.required?.includes(key)) {
       properties[key] = schema;
     } else {
       properties[key] = schema.optional();
@@ -114,8 +116,7 @@ async function getClient(): Promise<Client<any, any, any>> {
   return client;
 }
 
-export async function GET() {  
-  console.log(`--------configurator start------`);
+export async function GET() {   
 
   let client;
   try {
@@ -140,46 +141,55 @@ export async function GET() {
     // Fetch resources
     const resources = await client.listResources();  
     // Fetch tools and validate them
-    const rawTools = await client.listTools();
-    const validatedTools = LibraryToolArraySchema.parse(rawTools);
-    const libraryTools: LibraryTool[] = validatedTools;
-    const tools: Tool[] = libraryTools.map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      schema: parametersToZodSchema(tool.parameters),
-      handler: async (params: any) => {
-        try {
-          const result = await client.callTool({
-            name: tool.name,
-            arguments: params,
-          });
-          return result; // Return the result directly, as it's already in the format { content: [{ type: "text", text: string }] }
-        } catch (error) {
-          console.error(`Error executing tool ${tool.name}:`, error);
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
-              },
-            ],
-          };
-        }
-      },
-      parameters: tool.parameters, // Add parameters for compatibility with agentTools mapping
-    }));
+    const rawToolsResponse = await client.listTools();    
+    const validatedResponse = ListToolsResponseSchema.parse(rawToolsResponse);
+    const libraryTools: LibraryTool[] = validatedResponse.tools;
 
-    // Assemble AgentConfig for each agent with a profile
+        // Assemble AgentConfig for each agent with a profile
     const configs: AgentConfig[] = profiles.map((profile: AgentProfile) => {
-      console.log(`-------------in api ---------------`);
-      console.log(promptArray);
-
+      
       // Access the prompts array inside promptArray
       const prompt = promptArray.prompts.find((p) => p.name === profile.name);
       const stateMachineData = stateMachines.find((sm) => sm.agentId === profile.name);
 
-      // Filter the tools for this agent (already in the correct Tool format)
-      const agentTools = tools.filter((tool) => tool.name === profile.name);      
+      // Transform libraryTools into OpenAITool format
+      const agentTools: OpenAITool[] = libraryTools
+        .filter((tool) => tool.agentId === profile.id)
+        .map((tool) => ({
+          type: "function",
+          name: tool.name,
+          description: tool.description,
+          parameters: {
+            type: tool.inputSchema.type,
+            properties: tool.inputSchema.properties,
+            required: tool.inputSchema.required || [],
+            additionalProperties: tool.inputSchema.additionalProperties || false,
+          },
+        }));
+
+      // Create toolLogic entries for each tool
+      const toolLogic: AgentConfig['toolLogic'] = {};
+      for (const tool of agentTools) {
+        toolLogic[tool.name] = async (args: any, transcriptLogsFiltered: TranscriptItem[]) => {
+          try {
+            const result = await client.callTool({
+              name: tool.name,
+              arguments: args,
+            });
+            return result; // Return the result directly, as it's already in the format { content: [{ type: "text", text: string }] }
+          } catch (error) {
+            console.error(`Error executing tool ${tool.name}:`, error);
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
+                },
+              ],
+            };
+          }
+        };
+      }
 
       const stateMachineString = stateMachineData?.stateMachine
         ? `\n# Conversation States\n${JSON.stringify(stateMachineData.stateMachine, null, 2)}`
@@ -201,7 +211,7 @@ export async function GET() {
         publicDescription: profile.description,
         instructions: instructionsWithStateMachine,
         tools: agentTools,
-        toolLogic: {},
+        toolLogic,
         downstreamAgents,
       };
     });

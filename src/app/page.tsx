@@ -6,7 +6,6 @@ import Loading from '@/components/Loading';
 import { Message, Agent } from '@/lib/types';
 import ActivateButton from '@/components/Activate';
 import DynamicIsland from '@/components/DynamicIsland';
-import IPhoneModal from '@/components/modal/iphone-modal';
 import MetaAgent from '@/gallery/agents/metaagent';
 import { useAgentManager } from '@/contexts/AgentManager';
 
@@ -50,9 +49,6 @@ const ChatPage = () => {
   const [toolsVisible, setToolsVisible] = useState(false);
   const [isIslandOpen, setIsIslandOpen] = useState(false);
   const [isAgentSelected, setIsAgentSelected] = useState(false);
-  const [isCallActive, setIsCallActive] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [showTranscription, setShowTranscription] = useState(true);
 
   // MCP Server State
   const [echoMessage, setEchoMessage] = useState('Hello MCP!');
@@ -142,7 +138,7 @@ const ChatPage = () => {
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
       console.error('Chat Error:', error);
-       setMessages((prev) => [
+      setMessages((prev) => [
         ...prev,
         {
           id: crypto.randomUUID(),
@@ -168,36 +164,6 @@ const ChatPage = () => {
     setIsIslandOpen(false);
   };
 
-  // Reset agent selection when closing the iPhone modal
-  const handleCloseIPhoneModal = () => {
-    setActiveAgent(null);
-    setIsAgentSelected(false);
-    setIsCallActive(false);
-    setIsMuted(false);
-    setShowTranscription(true);
-  };
-
-  // Call control handlers
-  const handleStartCall = () => {
-    setIsCallActive(true);
-  };
-
-  const handleEndCall = () => {
-    setIsCallActive(false);
-  };
-
-  const handleMute = () => {
-    setIsMuted(!isMuted);
-  };
-
-  const handleSendText = (text: string) => {
-    // Handle text submission if needed
-  };
-
-  const handleToggleTranscription = () => {
-    setShowTranscription(!showTranscription);
-  };
-
   if (loading) {
     return <Loading />;
   }
@@ -218,32 +184,14 @@ const ChatPage = () => {
             <ActivateButton onClick={() => setIsIslandOpen(true)} />
           </div>
 
-          {/* Render iPhone Modal with MetaAgent when an agent is selected */}
-          <IPhoneModal
-            isOpen={isAgentSelected && !!activeAgent}
-            onClose={handleCloseIPhoneModal}
-            onStartCall={handleStartCall}
-            onEndCall={handleEndCall}
-            onMute={handleMute}
-            isMuted={isMuted}
-            isCallActive={isCallActive}
-            onSendText={handleSendText}
-            onToggleTranscription={handleToggleTranscription}
-            showTranscription={showTranscription}
-          >
-            {activeAgent && (
-              <MetaAgent
-                activeAgent={activeAgent}
-                setActiveAgent={setActiveAgent}
-                voice="ash"
-                onStartCall={handleStartCall}
-                onEndCall={handleEndCall}
-                onMute={handleMute}
-                onSendText={handleSendText}
-                onToggleTranscription={handleToggleTranscription}
-              />
-            )}
-          </IPhoneModal>
+          {/* Render MetaAgent when an agent is selected */}
+          {activeAgent && isAgentSelected && (
+            <MetaAgent
+              activeAgent={activeAgent}
+              setActiveAgent={setActiveAgent}
+              voice="ash"
+            />
+          )}
 
           {/* MCP Server Tools - Collapsible Section */}
           <div className="w-full max-w-2xl p-4 border rounded-lg bg-gray-800 shadow-md">

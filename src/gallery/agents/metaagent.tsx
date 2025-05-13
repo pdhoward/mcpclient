@@ -2,8 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import WaveSurfer from 'wavesurfer.js';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import IPhoneModal from '@/components/modal/iphone-modal';
 
 // Hooks
 import { useTranscript } from '@/contexts/TranscriptContext';
@@ -15,27 +14,27 @@ import { useAgentSession } from '@/hooks/useAgentSession';
 import { usePTTHandler } from '@/hooks/usePushToTalkHandler';
 
 // Types
-import { AgentComponentProps, AgentConfig, SessionStatus } from '@/lib/types';
+import { AgentComponentProps, AgentConfig, SessionStatus, TranscriptItem, Message } from '@/lib/types';
 
 interface MetaAgentProps extends AgentComponentProps {
   voice?: string;
-  onStartCall?: () => void;
-  onEndCall?: () => void;
-  onMute?: () => void;
-  onSendText?: (text: string) => void;
-  onToggleTranscription?: () => void;
 }
 
-function MetaAgent({
-  activeAgent,
-  setActiveAgent,
-  voice,
-  onStartCall,
-  onEndCall,
-  onMute,
-  onSendText,
-  onToggleTranscription,
-}: MetaAgentProps) {
+async function fetchAgentConfig(agent: string): Promise<AgentConfig[]> {
+  try {
+    const response = await fetch(`/api/mcp/agentconfigurator?api=${encodeURIComponent(agent)}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!response.ok) throw new Error('Failed to fetch agent config');
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching agent config:', error);
+    return [];
+  }
+}
+
+function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
   // State
   const [voiceState, setVoice] = useState(voice || 'ash');
   const [selectedAgentName, setSelectedAgentName] = useState<string>('');
@@ -45,8 +44,9 @@ function MetaAgent({
   const [userText, setUserText] = useState<string>('');
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>('DISCONNECTED');
   const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [isCallActive, setIsCallActive] = useState<boolean>(false);
+  const [showTranscription, setShowTranscription] = useState<boolean>(true);
   const [timer, setTimer] = useState<number>(0);
-  const [showTranscription, setShowTranscription] = useState(true);
 
   // Waveform
   const waveformRef = useRef<HTMLDivElement | null>(null);
@@ -54,7 +54,7 @@ function MetaAgent({
 
   // Hooks
   const { transcriptItems } = useTranscript();
-  const { logs, conversation } = useMappedMessages();
+  const { logs: messageLogs, conversation } = useMappedMessages();
   const { connectionState, dataChannel, dcRef, connectToRealtime, disconnectFromRealtime } =
     useSessionManager({
       selectedAgentName,
@@ -85,6 +85,19 @@ function MetaAgent({
     sendClientEvent,
     setSelectedAgentName,
   });
+
+  // Transform messageLogs (Message[]) to TranscriptItem[]
+  const logs: TranscriptItem[] = messageLogs.map((message: Message) => ({
+    itemId: message.id,
+    type: "MESSAGE" as const,
+    role: message.role,
+    data: { text: message.content },
+    expanded: false,
+    timestamp: new Date(message.timestamp).toISOString(),
+    createdAtMs: message.timestamp,
+    status: "DONE" as const,
+    isHidden: false,
+  }));
 
   // Timer Logic
   useEffect(() => {
@@ -147,39 +160,72 @@ function MetaAgent({
         wavesurferRef.current.pause();
       }
       setIsMuted(!isMuted);
-      if (onMute) onMute();
     }
   };
 
-  // Event Listeners
+  // Event Listeners for Tool Calls
   useEffect(() => {
     if (dataChannel) {
       const handleMessage = (e: MessageEvent) => {
-        handleServerEventRef.current(JSON.parse(e.data));
+        const event = JSON.parse(e.data);
+        console.log('Received event from OpenAI Live:', event);
+        if (event.type === 'tool-call') {
+          const { toolName, args } = event;
+          const agentConfig = selectedAgentConfigSet?.find(
+            (config) => config.name === selectedAgentName
+          );
+          const toolLogic = agentConfig?.toolLogic?.[toolName];
+          if (toolLogic) {
+            console.log(`Handling tool-call for ${toolName} with args:`, args);
+            toolLogic(args, transcriptItems).then((result: any) => {
+              console.log(`Tool ${toolName} executed, result:`, result);
+              sendClientEvent({
+                type: 'tool-result',
+                toolName,
+                result,
+              });
+            }).catch((error: any) => {
+              console.error(`Error executing tool ${toolName}:`, error);
+              sendClientEvent({
+                type: 'tool-result',
+                toolName,
+                result: {
+                  content: [
+                    {
+                      type: 'text',
+                      text: JSON.stringify({ error: error.message }),
+                    },
+                  ],
+                },
+              });
+            });
+          } else {
+            console.error(`No toolLogic found for tool ${toolName}`);
+            sendClientEvent({
+              type: 'tool-result',
+              toolName,
+              result: {
+                content: [
+                  {
+                    type: 'text',
+                    text: JSON.stringify({ error: `No toolLogic found for tool ${toolName}` }),
+                  },
+                ],
+              },
+            });
+          }
+        }
+        handleServerEventRef.current(event);
       };
       dataChannel.addEventListener('message', handleMessage);
       return () => dataChannel.removeEventListener('message', handleMessage);
     }
-  }, [dataChannel]);
-
-  // Define fetchAgentConfig function
-async function fetchAgentConfig(agent: string): Promise<AgentConfig[]> {
-  try {
-    const response = await fetch(`/api/mcp/agentconfigurator?api=${encodeURIComponent(agent)}`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    if (!response.ok) throw new Error('Failed to fetch agent config');
-    return await response.json();
-  } catch (error) {
-    console.error('Error fetching agent config:', error);
-    return [];
-  }
-}
+  }, [dataChannel, selectedAgentConfigSet, selectedAgentName, transcriptItems]);
 
   useEffect(() => {
     if (activeAgent?.name) {
-      fetchAgentConfig(activeAgent.name).then((agents: any) => {
+      fetchAgentConfig(activeAgent.name).then((agents) => {
+        console.log('Fetched AgentConfig:', JSON.stringify(agents, null, 2));
         const agentKeyToUse = agents[0]?.name || '';
         setSelectedAgentName(agentKeyToUse);
         setSelectedAgentConfigSet(agents);
@@ -192,19 +238,22 @@ async function fetchAgentConfig(agent: string): Promise<AgentConfig[]> {
 
   useEffect(() => {
     if (selectedAgentName && sessionStatus === 'DISCONNECTED') {
+      console.log('Initiating connection to OpenAI Live for agent:', selectedAgentName);
       connectToRealtime();
-      if (onStartCall) onStartCall();
+      setIsCallActive(true);
     }
-  }, [selectedAgentName]);
+  }, [selectedAgentName, sessionStatus]);
 
   useEffect(() => {
     if (sessionStatus === 'CONNECTED' && selectedAgentConfigSet && selectedAgentName) {
+      console.log('Sending AgentConfig to OpenAI Live:', JSON.stringify(selectedAgentConfigSet, null, 2));
       updateSession(true);
     }
   }, [selectedAgentConfigSet, selectedAgentName, sessionStatus]);
 
   useEffect(() => {
     if (sessionStatus === 'CONNECTED') {
+      console.log('Updating session with PTT state:', isPTTActive);
       updateSession();
     }
   }, [isPTTActive]);
@@ -237,25 +286,33 @@ async function fetchAgentConfig(agent: string): Promise<AgentConfig[]> {
   // Event Handlers
   const onToggleConnection = () => {
     if (sessionStatus === 'CONNECTED' || sessionStatus === 'CONNECTING') {
+      console.log('Disconnecting from OpenAI Live');
       disconnectFromRealtime();
       if (wavesurferRef.current) {
         wavesurferRef.current.stop();
       }
-      if (onEndCall) onEndCall();
+      setIsCallActive(false);
     } else {
+      console.log('Connecting to OpenAI Live');
       connectToRealtime();
-      if (onStartCall) onStartCall();
+      setIsCallActive(true);
     }
   };
 
   const handleTextSubmit = (text: string) => {
+    console.log('Sending text message:', text);
     handleSendTextMessage(text, transcriptItems);
-    if (onSendText) onSendText(text);
+    setUserText('');
   };
 
   const handleToggleTranscription = () => {
     setShowTranscription(!showTranscription);
-    if (onToggleTranscription) onToggleTranscription();
+  };
+
+  const handleClose = () => {
+    console.log('Closing MetaAgent and disconnecting');
+    disconnectFromRealtime();
+    setActiveAgent(null);
   };
 
   // Auto-scroll to the latest message
@@ -265,94 +322,84 @@ async function fetchAgentConfig(agent: string): Promise<AgentConfig[]> {
   }, [transcriptItems]);
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold text-neutral-200">
-          {selectedAgentName || 'Voice Agent'}
-        </h3>
-        <span className="text-sm text-neutral-400">{formatTime(timer)}</span>
-      </div>
+    <IPhoneModal
+      isOpen={true} // Always open since MetaAgent is rendered when selected
+      onClose={handleClose}
+      onStartCall={onToggleConnection}
+      onEndCall={onToggleConnection}
+      onMute={toggleMute}
+      isMuted={isMuted}
+      isCallActive={isCallActive}
+      onSendText={handleTextSubmit}
+      onToggleTranscription={handleToggleTranscription}
+      showTranscription={showTranscription}
+      logs={logs}
+    >
+      <div className="h-full flex flex-col">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-neutral-200">
+            {selectedAgentName || 'Voice Agent'}
+          </h3>
+          <span className="text-sm text-neutral-400">{formatTime(timer)}</span>
+        </div>
 
-      {/* Waveform */}
-      <div
-        ref={waveformRef}
-        className="w-full h-20 rounded-lg bg-neutral-800 overflow-hidden mb-4 relative"
-      >
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-neutral-700 to-transparent opacity-30" />
-      </div>
+        {/* Waveform */}
+        <div
+          ref={waveformRef}
+          className="w-full h-20 rounded-lg bg-neutral-800 overflow-hidden mb-4 relative"
+        >
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-neutral-700 to-transparent opacity-30" />
+        </div>
 
-      {/* Transcription Area */}
-      <div className="flex-1 overflow-y-auto space-y-4 mb-4">
-        {showTranscription ? (
-          transcriptItems
-            .filter((item) => item.type === 'MESSAGE' && !item.isHidden)
-            .map((item, index) => (
-              <div
-                key={index}
-                className={`flex ${
-                  item.role === 'user'
-                    ? 'justify-end'
-                    : item.role === 'assistant'
-                    ? 'justify-start'
-                    : 'justify-center'
-                }`}
-              >
+        {/* Transcription Area */}
+        <div className="flex-1 overflow-y-auto space-y-4 mb-4">
+          {showTranscription ? (
+            transcriptItems
+              .filter((item) => item.type === 'MESSAGE' && !item.isHidden)
+              .map((item, index) => (
                 <div
-                  className={`max-w-[70%] p-3 rounded-2xl ${
+                  key={index}
+                  className={`flex ${
                     item.role === 'user'
-                      ? 'bg-blue-600 text-white'
+                      ? 'justify-end'
                       : item.role === 'assistant'
-                      ? 'bg-neutral-700 text-neutral-200'
-                      : 'bg-neutral-600 text-neutral-300'
+                      ? 'justify-start'
+                      : 'justify-center'
                   }`}
                 >
-                  <p className="text-sm">{item.data?.text ?? 'No message content'}</p>
-                  <p className="text-xs text-neutral-400 mt-1">
-                    {new Date(item.timestamp).toLocaleTimeString()}
-                  </p>
+                  <div
+                    className={`max-w-[70%] p-3 rounded-2xl ${
+                      item.role === 'user'
+                        ? 'bg-blue-600 text-white'
+                        : item.role === 'assistant'
+                        ? 'bg-neutral-700 text-neutral-200'
+                        : 'bg-neutral-600 text-neutral-300'
+                    }`}
+                  >
+                    <p className="text-sm">{item.data?.text ?? 'No message content'}</p>
+                    <p className="text-xs text-neutral-400 mt-1">
+                      {new Date(item.timestamp).toLocaleTimeString()}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))
-        ) : (
-          <div className="flex items-center justify-center h-full text-neutral-400">
-            Transcription Hidden
+              ))
+          ) : (
+            <div className="flex items-center justify-center h-full text-neutral-400">
+              Transcription Hidden
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Status */}
+        {connectionState && (
+          <div className="text-sm text-neutral-400 text-center mb-4">
+            Status: {connectionState}
           </div>
         )}
-        <div ref={messagesEndRef} />
       </div>
-
-      {/* Additional Features */}
-      <div className="flex justify-between items-center mb-4">
-        <Button variant="outline" disabled>
-          Select Voice (Coming Soon)
-        </Button>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button variant="outline">System Logs</Button>
-          </DialogTrigger>
-          <DialogContent className="bg-neutral-900 text-neutral-200 border-neutral-800">
-            <DialogHeader>
-              <DialogTitle>System Logs</DialogTitle>
-            </DialogHeader>
-            <div className="text-sm text-neutral-400">
-              {logs.length > 0 ? (
-                logs.map((log, index) => <p key={index}>{log.content ?? 'No log content'}</p>)
-              ) : (
-                <p>No logs available.</p>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {/* Status */}
-      {connectionState && (
-        <div className="text-sm text-neutral-400 text-center mb-4">
-          Status: {connectionState}
-        </div>
-      )}
-    </div>
+    </IPhoneModal>
   );
 }
 

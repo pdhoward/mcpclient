@@ -20,7 +20,7 @@ export function useSessionManager({
   selectedAgentConfigSet,
   isAudioPlaybackEnabled,
   sessionStatus,
-  setSessionStatus
+  setSessionStatus,
 }: UseSessionManagerProps) {
   const [dataChannel, setDataChannel] = useState<RTCDataChannel | null>(null);
   const [connectionState, setConnectionState] = useState<string>("disconnected");
@@ -55,7 +55,7 @@ export function useSessionManager({
 
       return data.client_secret.value;
     } catch (err) {
-      throw new Error(`getEphemeralToken error ${err}`)
+      throw new Error(`getEphemeralToken error: ${err}`);
     }
   };
 
@@ -67,10 +67,13 @@ export function useSessionManager({
   const connectToRealtime = async () => {
     if (sessionStatus !== "DISCONNECTED") return;
     setSessionStatus("CONNECTING");
+    console.log('Connecting to OpenAI Live...');
 
     try {
       const EPHEMERAL_KEY = await fetchEphemeralKey();
-      if (!EPHEMERAL_KEY) { return; }
+      if (!EPHEMERAL_KEY) {
+        return;
+      }
 
       if (!audioElementRef.current) {
         audioElementRef.current = document.createElement("audio");
@@ -78,29 +81,28 @@ export function useSessionManager({
       }
       audioElementRef.current.autoplay = isAudioPlaybackEnabled;
 
-      const { pc, dc } = await createRealtimeConnection(
-        EPHEMERAL_KEY,
-        audioElementRef
-      );
+      const { pc, dc } = await createRealtimeConnection(EPHEMERAL_KEY, audioElementRef);
       pcRef.current = pc;
       dcRef.current = dc;
 
       dc.addEventListener("open", () => {
         logClientEvent({}, "data_channel.open");
-        setSessionStatus("CONNECTED");  // Only set connected when the channel is open
+        console.log('Data channel opened, setting session to CONNECTED');
+        setSessionStatus("CONNECTED");
       });
       dc.addEventListener("close", () => {
         logClientEvent({}, "data_channel.close");
+        console.log('Data channel closed, setting session to DISCONNECTED');
         setSessionStatus("DISCONNECTED");
       });
       dc.addEventListener("error", (err: any) => {
         logClientEvent({ error: err }, "data_channel.error");
+        console.error('Data channel error:', err);
       });
 
       setDataChannel(dc);
-     
     } catch (err) {
-      console.error("Error connecting to realtime:", err);
+      console.error("Error connecting to OpenAI Live:", err);
       setSessionStatus("DISCONNECTED");
     }
   };
@@ -120,6 +122,7 @@ export function useSessionManager({
     setDataChannel(null);
     setSessionStatus("DISCONNECTED");
     logClientEvent({}, "disconnected");
+    console.log('Disconnected from OpenAI Live');
   };
 
   // Update connection state based on data channel
@@ -127,6 +130,7 @@ export function useSessionManager({
     if (dataChannel) {
       const updateConnectionState = () => {
         setConnectionState(dataChannel.readyState);
+        console.log('Data channel state updated:', dataChannel.readyState);
       };
 
       dataChannel.addEventListener('open', updateConnectionState);
@@ -175,6 +179,6 @@ export function useSessionManager({
     dataChannel,
     dcRef,
     connectToRealtime,
-    disconnectFromRealtime
+    disconnectFromRealtime,
   };
 }
