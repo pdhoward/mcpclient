@@ -22,7 +22,9 @@ interface MetaAgentProps extends AgentComponentProps {
 async function fetchAgentConfig(agent: string): Promise<AgentConfig[]> {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const timeoutId = setTimeout(() => {
+      controller.abort('Fetch timed out after 30 seconds');
+    }, 30000);
 
     const response = await fetch(`/api/mcp/agentconfigurator?api=${encodeURIComponent(agent)}`, {
       method: 'GET',
@@ -36,9 +38,7 @@ async function fetchAgentConfig(agent: string): Promise<AgentConfig[]> {
       const errorText = await response.text();
       throw new Error(`Failed to fetch agent config: ${response.status} - ${errorText}`);
     }
-
-    const data = await response.json();
-    console.log('AgentConfig fetched successfully:', JSON.stringify(data, null, 2));
+    const data = await response.json();    
     return data;
   } catch (error: any) {
     console.error('Error fetching agent config:', error.message, error);
@@ -51,10 +51,12 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
   const [voiceState, setVoice] = useState(voice || 'ash');
   const [selectedAgentName, setSelectedAgentName] = useState<string>('');
   const [selectedAgentConfigSet, setSelectedAgentConfigSet] = useState<AgentConfig[] | null>(null);
+  const [hasFetchedConfig, setHasFetchedConfig] = useState<string | null>(null); // Track fetched agent name
   const [isPTTActive, setIsPTTActive] = useState<boolean>(false);
   const [isAudioPlaybackEnabled, setIsAudioPlaybackEnabled] = useState<boolean>(true);
   const [userText, setUserText] = useState<string>('');
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>('DISCONNECTED');
+  const [userDisconnected, setUserDisconnected] = useState<boolean>(false); // track user action on connections
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isCallActive, setIsCallActive] = useState<boolean>(false);
   const [showTranscription, setShowTranscription] = useState<boolean>(true);
@@ -289,27 +291,44 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
     }
   }, [dataChannel, selectedAgentConfigSet, selectedAgentName, transcriptItems]);
 
-  useEffect(() => {
-    if (activeAgent?.name) {
+  ///////////////////////////////////////////////
+  ///  action when new agent selected       ////
+  /////////////////////////////////////////////
+
+   useEffect(() => {
+    if (activeAgent?.name && activeAgent.name !== hasFetchedConfig) {
+      console.log('Fetching AgentConfig for:', activeAgent.name);
       fetchAgentConfig(activeAgent.name).then((agents) => {
         console.log('Fetched AgentConfig:', JSON.stringify(agents, null, 2));
         const agentKeyToUse = agents[0]?.name || '';
         setSelectedAgentName(agentKeyToUse);
         setSelectedAgentConfigSet(agents);
+        setHasFetchedConfig(activeAgent.name); // Mark as fetched
+        setUserDisconnected(false); // Allow auto-connection
       });
-    } else {
+    } else if (!activeAgent?.name) {
       setSelectedAgentName('');
       setSelectedAgentConfigSet(null);
+      setHasFetchedConfig(null);
     }
   }, [activeAgent?.name]);
 
+  //////////////////////////////////////////////////////
+  ///  initiating connection for selected agent    ////
+  // note - logic prevents reconnect on status alone /
+  ///////////////////////////////////////////////////
+
   useEffect(() => {
-    if (selectedAgentName && sessionStatus === 'DISCONNECTED') {
+    if (
+      selectedAgentName && 
+      sessionStatus === 'DISCONNECTED' &&
+      !userDisconnected
+    ) {
       console.log('Initiating connection to OpenAI Live for agent:', selectedAgentName);
       connectToRealtime();
       setIsCallActive(true);
     }
-  }, [selectedAgentName, sessionStatus]);
+  }, [selectedAgentName, sessionStatus, userDisconnected]);
 
   useEffect(() => {
     if (sessionStatus === 'CONNECTED' && selectedAgentConfigSet && selectedAgentName) {
@@ -324,6 +343,8 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
       updateSession();
     }
   }, [isPTTActive]);
+
+ 
 
   useEffect(() => {
     const storedPushToTalkUI = localStorage.getItem('pushToTalkUI');
@@ -356,10 +377,12 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
       console.log('Disconnecting from OpenAI Live');
       disconnectFromRealtime();
       setIsCallActive(false);
+      setUserDisconnected(true);     
     } else {
       console.log('Connecting to OpenAI Live');
       connectToRealtime();
       setIsCallActive(true);
+      setUserDisconnected(false); // Allow reconnection
     }
   };
 
@@ -373,9 +396,22 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
     setShowTranscription(!showTranscription);
   };
 
+   //////////////////////////////////////////////////////////
+   ////   actions to end session and close iphone    ////////
+  ////////////////////////////////////////////////////////
+
+  const handleEndSession = () => {
+    console.log('Ending session and closing MetaAgent');
+    disconnectFromRealtime();
+    setUserDisconnected(true); // Prevent reconnection
+    setActiveAgent(null); // Clear agent to close modal
+    setIsCallActive(false); // Ensure UI reflects call ended
+  };
+
   const handleClose = () => {
     console.log('Closing MetaAgent and disconnecting');
     disconnectFromRealtime();
+    setUserDisconnected(true);
     setActiveAgent(null);
   };
 
@@ -387,10 +423,11 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
 
   return (
     <IPhoneModal
-      isOpen={true} // Always open since MetaAgent is rendered when selected
+      isOpen={!!activeAgent}  
       onClose={handleClose}
       onStartCall={onToggleConnection}
       onEndCall={onToggleConnection}
+      onEndSession={handleEndSession}
       onMute={toggleMute}
       isMuted={isMuted}
       isCallActive={isCallActive}

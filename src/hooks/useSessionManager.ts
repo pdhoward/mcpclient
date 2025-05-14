@@ -94,6 +94,11 @@ export function useSessionManager({
       });
       audioElementRef.current.srcObject = remoteStream;
 
+      // ✅ safety item for audio detection
+      audioElementRef.current.play().catch((err) => {
+        console.warn("Autoplay may be blocked by browser:", err);
+      });
+
       dc.addEventListener("open", () => {
         logClientEvent({}, "data_channel.open");
         console.log('Data channel opened, setting session to CONNECTED');

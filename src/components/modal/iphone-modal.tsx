@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { FaPhone, FaPhoneSlash, FaMicrophone, FaMicrophoneSlash, FaEye, FaUserPlus, FaFileExport } from 'react-icons/fa';
+import { FaPhone, FaPhoneSlash, FaMicrophone, FaMicrophoneSlash, FaEye, FaUserPlus, FaFileExport, FaTimes } from 'react-icons/fa';
 import { HiOutlineArrowUpRight } from 'react-icons/hi2';
 import clsx from 'clsx';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -12,6 +12,7 @@ interface IPhoneModalProps {
   onClose: () => void;
   onStartCall: () => void;
   onEndCall: () => void;
+  onEndSession: () => void;  // this closed the modal
   onMute: () => void;
   isMuted: boolean;
   isCallActive: boolean;
@@ -27,6 +28,7 @@ const IPhoneModal: React.FC<IPhoneModalProps> = ({
   onClose,
   onStartCall,
   onEndCall,
+  onEndSession,
   onMute,
   isMuted,
   isCallActive,
@@ -156,12 +158,22 @@ const IPhoneModal: React.FC<IPhoneModalProps> = ({
                       </button>
                     </>
                   ) : (
-                    <button
-                      onClick={onStartCall}
-                      className="p-2 rounded-full bg-green-600"
-                    >
-                      <FaPhone className="text-white" />
-                    </button>
+                    <>
+                      <button
+                        onClick={onStartCall}
+                        className="p-2 rounded-full bg-green-600"
+                      >
+                        <FaPhone className="text-white" />
+                      </button>
+                      <button
+                          onClick={onEndSession}
+                          className="p-2 rounded-full bg-gray-600"
+                          title="End Session"
+                        >
+                          <FaTimes className="text-white" /> {/* New icon for end session */}
+                      </button>
+                    </>
+                    
                   )}
                 </div>
               </div>

@@ -1,5 +1,5 @@
 "use client";
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from "react";
 import { Agent, Message } from "@/lib/types";
 
 interface AgentManagerContextType {
@@ -52,17 +52,22 @@ const fetchAgents = async (): Promise<Agent[]> => {
 
 export function AgentManager({ children }: { children: ReactNode }) {
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [activeAgent, setActiveAgent] = useState<Agent | null>(null);
-  
-
-
+  const [activeAgentState, setActiveAgentState] = useState<Agent | null>(null);
+ 
   // Fetch agents on mount
   useEffect(() => {
     fetchAgents().then((fetchedAgents) => {
       setAgents(fetchedAgents);
     });
   }, []);
- 
+
+  // Memoize activeAgent to prevent reference changes
+  const activeAgent = useMemo(() => activeAgentState, [activeAgentState?.name]);
+
+  // Wrap setActiveAgent to ensure stable reference
+  const setActiveAgent = (agent: Agent | null) => {
+    setActiveAgentState(agent);
+  }; 
 
   const value: AgentManagerContextType = {
     agents,
