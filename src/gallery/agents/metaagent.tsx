@@ -1,6 +1,5 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
 import IPhoneModal from '@/components/modal/iphone-modal';
 
 // Hooks
@@ -296,6 +295,13 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
   /////////////////////////////////////////////
 
    useEffect(() => {
+    console.log(`-----debug restart line 298 -----`)
+    console.log(`for agent ${JSON.stringify(activeAgent, null, 2)}`) 
+    console.log(`selected agent name value is ${selectedAgentName}`)
+    console.log(`selected agent config set is ${selectedAgentConfigSet}`)
+    console.log(`has fetched config value is ${hasFetchedConfig}`)
+    console.log(`user disconnected value is ${userDisconnected}`)
+    console.log(`is call active value is ${isCallActive}`)   
     if (activeAgent?.name && activeAgent.name !== hasFetchedConfig) {
       console.log('Fetching AgentConfig for:', activeAgent.name);
       fetchAgentConfig(activeAgent.name).then((agents) => {
@@ -401,18 +407,27 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
   ////////////////////////////////////////////////////////
 
   const handleEndSession = () => {
-    console.log('Ending session and closing MetaAgent');
-    disconnectFromRealtime();
+    console.log('closing iPhone ');   
+    console.log(`for agent ${JSON.stringify(activeAgent, null, 2)}`) 
+    setSelectedAgentName(''); // Clear agent name to prevent reconnection
+    setSelectedAgentConfigSet(null); // Clear config to prevent reconnection
+    setHasFetchedConfig(null); // Reset fetched config
     setUserDisconnected(true); // Prevent reconnection
     setActiveAgent(null); // Clear agent to close modal
     setIsCallActive(false); // Ensure UI reflects call ended
+    //disconnectFromRealtime();
+    console.log('handleEndSession completed');  
   };
 
   const handleClose = () => {
     console.log('Closing MetaAgent and disconnecting');
-    disconnectFromRealtime();
+    setSelectedAgentName('');
+    setSelectedAgentConfigSet(null);
+    setHasFetchedConfig(null);
     setUserDisconnected(true);
     setActiveAgent(null);
+    setIsCallActive(false);
+    disconnectFromRealtime();
   };
 
   // Auto-scroll to the latest message

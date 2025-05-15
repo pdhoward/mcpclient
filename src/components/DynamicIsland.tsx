@@ -43,13 +43,7 @@ export default function DynamicIsland({ isOpen, onClose, onAgentSelect }: Dynami
     onAgentSelect(agent); // set activeAgent and isAgentSelected
     onClose(); 
   };
-
-  // Set default agent on mount
-  useEffect(() => {
-    if (agents.length > 0 && !activeAgent) {
-      setActiveAgent(agents[0]);
-    }
-  }, [agents, activeAgent, setActiveAgent]);
+ 
 
   return (
     <AnimatePresence>
