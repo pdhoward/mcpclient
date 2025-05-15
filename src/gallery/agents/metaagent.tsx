@@ -18,7 +18,12 @@ interface MetaAgentProps extends AgentComponentProps {
   voice?: string;
 }
 
+let x = 0
+
 async function fetchAgentConfig(agent: string): Promise<AgentConfig[]> {
+  console.log(`-----------debug fetch agent config --------`)
+  x++
+  console.log(`fetch config for ${agent} for the time #${x}`)
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
@@ -294,14 +299,7 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
   ///  action when new agent selected       ////
   /////////////////////////////////////////////
 
-   useEffect(() => {
-    console.log(`-----debug restart line 298 -----`)
-    console.log(`for agent ${JSON.stringify(activeAgent, null, 2)}`) 
-    console.log(`selected agent name value is ${selectedAgentName}`)
-    console.log(`selected agent config set is ${selectedAgentConfigSet}`)
-    console.log(`has fetched config value is ${hasFetchedConfig}`)
-    console.log(`user disconnected value is ${userDisconnected}`)
-    console.log(`is call active value is ${isCallActive}`)   
+   useEffect(() => {   
     if (activeAgent?.name && activeAgent.name !== hasFetchedConfig) {
       console.log('Fetching AgentConfig for:', activeAgent.name);
       fetchAgentConfig(activeAgent.name).then((agents) => {
@@ -406,21 +404,16 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
    ////   actions to end session and close iphone    ////////
   ////////////////////////////////////////////////////////
 
-  const handleEndSession = () => {
-    console.log('closing iPhone ');   
-    console.log(`for agent ${JSON.stringify(activeAgent, null, 2)}`) 
+  const handleEndSession = () => {   
     setSelectedAgentName(''); // Clear agent name to prevent reconnection
     setSelectedAgentConfigSet(null); // Clear config to prevent reconnection
     setHasFetchedConfig(null); // Reset fetched config
     setUserDisconnected(true); // Prevent reconnection
     setActiveAgent(null); // Clear agent to close modal
-    setIsCallActive(false); // Ensure UI reflects call ended
-    //disconnectFromRealtime();
-    console.log('handleEndSession completed');  
+    setIsCallActive(false); // Ensure UI reflects call ended    
   };
 
   const handleClose = () => {
-    console.log('Closing MetaAgent and disconnecting');
     setSelectedAgentName('');
     setSelectedAgentConfigSet(null);
     setHasFetchedConfig(null);
