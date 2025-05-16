@@ -44,8 +44,9 @@ const ChatPage = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [data, setData] = useState<MCPData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isLoading, setIsLoading] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [toolLoading, setToolLoading] = useState<string | null>(null);
+  const [chatLoading, setChatLoading] = useState(false);
   const [toolsVisible, setToolsVisible] = useState(false);
   const [isIslandOpen, setIsIslandOpen] = useState(false);
   const [isAgentSelected, setIsAgentSelected] = useState(false);
@@ -61,16 +62,16 @@ const ChatPage = () => {
       .then((res) => res.json())
       .then((json) => {
         setData(json);
-        setLoading(false);
+        setProfileLoading(false);
       })
       .catch((err) => {
         console.error('MCP Profile Error:', err);
-        setLoading(false);
+        setProfileLoading(false);
       });
   }, []);
 
   const executeToolCall = async (toolName: string, input: Record<string, any>) => {
-    setLoading(true);
+    setToolLoading(toolName);
     try {
       const response = await fetch('/api/mcp/calltool', {
         method: 'POST',
@@ -82,12 +83,13 @@ const ChatPage = () => {
     } catch (err) {
       console.error('Tool Call Error:', err);
       setEchoResult('Error executing tool');
+    } finally {
+      setToolLoading(null);
     }
-    setLoading(false);
   };
 
   const executeHealthCheck = async () => {
-    setLoading(true);
+    setToolLoading('health');
     try {
       const response = await fetch('/api/mcp/health', {
         method: 'GET',
@@ -98,8 +100,9 @@ const ChatPage = () => {
     } catch (err) {
       console.error('Health Check Error:', err);
       setAlerts('Error checking health');
+    } finally {
+      setToolLoading(null);
     }
-    setLoading(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -108,13 +111,13 @@ const ChatPage = () => {
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
-      role: "user",
+      role: 'user',
       content: input,
       timestamp: Date.now(),
     };
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
-    setIsLoading(true);
+    setChatLoading(true);
 
     try {
       const response = await fetch('/api/chat', {
@@ -129,7 +132,7 @@ const ChatPage = () => {
 
       const assistantMessage: Message = {
         id: data.id,
-        role: "assistant",
+        role: 'assistant',
         content: data.content,
         annotations: data.annotations || undefined,
         timestamp: Date.now(),
@@ -142,13 +145,13 @@ const ChatPage = () => {
         ...prev,
         {
           id: crypto.randomUUID(),
-          role: "assistant",
-          content: "Sorry, something went wrong.",
+          role: 'assistant',
+          content: 'Sorry, something went wrong.',
           timestamp: Date.now(),
         },
       ]);
     } finally {
-      setIsLoading(false);
+      setChatLoading(false);
     }
   };
 
@@ -157,20 +160,14 @@ const ChatPage = () => {
     setInput('');
   };
 
-  // Handle agent selection from DynamicIsland
   const handleAgentSelect = (agent: Agent) => {
     setActiveAgent(agent);
     setIsAgentSelected(true);
     setIsIslandOpen(false);
   };
 
-  if (loading) {
-    return <Loading />;
-  }
-
   return (
     <div className="min-h-screen bg-black flex flex-col">
-      {/* Main Page Dynamic Island for Agent Selection */}
       <DynamicIsland
         isOpen={isIslandOpen}
         onClose={() => setIsIslandOpen(false)}
@@ -181,10 +178,13 @@ const ChatPage = () => {
           <CloudSun className="h-20 w-20 text-sky-400" />
           <h1 className="text-4xl font-bold text-white">MCP Control Panel</h1>
           <div className="relative w-108 h-20">
-            <ActivateButton onClick={() => setIsIslandOpen(true)} />
+            <ActivateButton
+              onClick={() => setIsIslandOpen(true)}
+              disabled={profileLoading}
+              loading={profileLoading}
+            />
           </div>
 
-          {/* Render MetaAgent when an agent is selected */}
           {activeAgent && isAgentSelected && (
             <MetaAgent
               activeAgent={activeAgent}
@@ -193,11 +193,11 @@ const ChatPage = () => {
             />
           )}
 
-          {/* MCP Server Tools - Collapsible Section */}
           <div className="w-full max-w-2xl p-4 border rounded-lg bg-gray-800 shadow-md">
             <button
               onClick={() => setToolsVisible(!toolsVisible)}
-              className="flex items-center justify-between w-full p-3 text-left font-semibold text-white bg-gray-700 rounded-md"
+              className="flex items-center justify-between w-full p-3 text-left font-semibold text-white bg-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={profileLoading}
             >
               MCP Server Tools
               {toolsVisible ? <ChevronUp /> : <ChevronDown />}
@@ -219,12 +219,10 @@ const ChatPage = () => {
             )}
           </div>
 
-          {/* Tool Execution Forms */}
           <div className="w-full max-w-2xl">
             <h2 className="text-2xl font-semibold mb-4 text-white">Execute Tools</h2>
 
             <div className="space-y-6">
-              {/* Translate Tool */}
               <div className="p-4 border rounded-lg bg-gray-800 shadow-md">
                 <h3 className="text-lg font-semibold text-white mb-2">
                   Translate a Query to Machine Language
@@ -233,15 +231,20 @@ const ChatPage = () => {
                   type="text"
                   value={echoMessage}
                   onChange={(e) => setEchoMessage(e.target.value)}
-                  className="w-full p-2 border rounded bg-gray-700 text-white placeholder-gray-400"
+                  className="w-full p-2 border rounded bg-gray-700 text-white placeholder-gray-400 disabled:opacity-50"
                   placeholder="Enter message..."
+                  disabled={toolLoading === 'translate' || profileLoading}
                 />
                 <button
                   onClick={() => executeToolCall('translate', { text: echoMessage })}
-                  className="mt-3 w-full bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-blue-300"
-                  disabled={loading}
+                  className="mt-3 w-full bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-blue-300 flex items-center justify-center"
+                  disabled={toolLoading === 'translate' || profileLoading}
                 >
-                  {loading ? 'Running...' : 'Run Translate'}
+                  {toolLoading === 'translate' ? (
+                    <Loading className="scale-50 h-6 w-12" />
+                  ) : (
+                    'Run Translate'
+                  )}
                 </button>
                 {echoResult && (
                   <p className="mt-3 p-3 bg-gray-700 rounded text-gray-200">
@@ -250,15 +253,18 @@ const ChatPage = () => {
                 )}
               </div>
 
-              {/* Health Check */}
               <div className="p-4 border rounded-lg bg-gray-800 shadow-md">
                 <h3 className="text-lg font-semibold text-white mb-2">Health Check</h3>
                 <button
                   onClick={() => executeHealthCheck()}
-                  className="mt-3 w-full bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-blue-300"
-                  disabled={loading}
+                  className="mt-3 w-full bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-blue-300 flex items-center justify-center"
+                  disabled={toolLoading === 'health' || profileLoading}
                 >
-                  {loading ? 'Running...' : 'Check Health'}
+                  {toolLoading === 'health' ? (
+                    <Loading className="scale-50 h-6 w-12" />
+                  ) : (
+                    'Check Health'
+                  )}
                 </button>
                 {alerts && (
                   <p className="mt-3 p-3 bg-gray-700 rounded text-gray-200">
@@ -269,11 +275,9 @@ const ChatPage = () => {
             </div>
           </div>
 
-          {/* Chat Widget */}
           <div className="w-full max-w-2xl bg-gray-800 rounded-lg shadow-lg p-6">
             <h1 className="text-2xl font-bold text-white mb-4">MCP Chat Demo</h1>
 
-            {/* Chat Display */}
             <div className="h-96 overflow-y-auto border border-gray-700 rounded-md p-4 mb-4 bg-gray-900">
               {messages.length === 0 ? (
                 <p className="text-gray-400">Ask me anything!</p>
@@ -308,22 +312,21 @@ const ChatPage = () => {
               )}
             </div>
 
-            {/* Chat Input */}
             <form onSubmit={handleSubmit} className="flex gap-2">
               <input
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="e.g., Fetch the License file from pdhoward/proximity"
-                className="flex-1 p-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-700 text-white placeholder-gray-400"
-                disabled={isLoading}
+                className="flex-1 p-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-700 text-white placeholder-gray-400 disabled:opacity-50"
+                disabled={chatLoading || profileLoading}
               />
               <button
                 type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300"
-                disabled={isLoading}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300 flex items-center justify-center"
+                disabled={chatLoading || profileLoading}
               >
-                {isLoading ? 'Sending...' : 'Send'}
+                {chatLoading ? <Loading className="scale-50 h-6 w-12" /> : 'Send'}
               </button>
             </form>
             <button

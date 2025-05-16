@@ -66,13 +66,6 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
   const [showTranscription, setShowTranscription] = useState<boolean>(true);
   const [timer, setTimer] = useState<number>(0);
 
-  // Waveform
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
-
   // Hooks
   const { transcriptItems } = useTranscript();
   const { logs: messageLogs, conversation } = useMappedMessages();
@@ -126,6 +119,12 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
     };
   });
 
+   // Log transcriptItems and logs for debugging
+  useEffect(() => {
+    console.log('transcriptItems:', JSON.stringify(transcriptItems, null, 2));
+    console.log('logs:', JSON.stringify(logs, null, 2));
+  }, [transcriptItems, logs]);
+
   // Timer Logic
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -145,88 +144,6 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
     const secs = seconds % 60;
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
-
-  // Real-Time Waveform Visualization
-  useEffect(() => {
-    if (!canvasRef.current || !audioElement) return;
-
-    const canvas = canvasRef.current;
-    const canvasCtx = canvas.getContext('2d');
-    if (!canvasCtx) return;
-
-    // Set canvas dimensions
-    canvas.width = canvas.offsetWidth;
-    canvas.height = canvas.offsetHeight;
-
-    // Initialize Web Audio API only once
-    if (!audioContextRef.current) {
-      audioContextRef.current = new AudioContext();
-      analyserRef.current = audioContextRef.current.createAnalyser();
-      analyserRef.current.fftSize = 2048;
-
-      // Connect audio element to analyser
-      sourceRef.current = audioContextRef.current.createMediaElementSource(audioElement);
-      sourceRef.current.connect(analyserRef.current);
-      analyserRef.current.connect(audioContextRef.current.destination);
-    }
-
-    const bufferLength = analyserRef.current!.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-
-    const draw = () => {
-      if (!canvasCtx || !analyserRef.current) return;
-
-      analyserRef.current!.getByteTimeDomainData(dataArray);
-
-      canvasCtx.fillStyle = 'rgb(51, 65, 85)';
-      canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
-
-      canvasCtx.lineWidth = 2;
-      canvasCtx.strokeStyle = '#4CAF50';
-      canvasCtx.beginPath();
-
-      const sliceWidth = canvas.width / bufferLength;
-      let x = 0;
-
-      for (let i = 0; i < bufferLength; i++) {
-        const v = dataArray[i] / 128.0;
-        const y = (v * canvas.height) / 2;
-
-        if (i === 0) {
-          canvasCtx.moveTo(x, y);
-        } else {
-          canvasCtx.lineTo(x, y);
-        }
-
-        x += sliceWidth;
-      }
-
-      canvasCtx.lineTo(canvas.width, canvas.height / 2);
-      canvasCtx.stroke();
-
-      animationFrameRef.current = requestAnimationFrame(draw);
-    };
-
-    draw();
-
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-      if (sourceRef.current) {
-        sourceRef.current.disconnect();
-        sourceRef.current = null;
-      }
-      if (analyserRef.current) {
-        analyserRef.current.disconnect();
-        analyserRef.current = null;
-      }
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-        audioContextRef.current = null;
-      }
-    };
-  }, [audioElement]); // Only depend on audioElement
 
   // Mute/Unmute Logic
   const toggleMute = () => {
@@ -451,13 +368,7 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
             {selectedAgentName || 'Voice Agent'}
           </h3>
           <span className="text-sm text-neutral-400">{formatTime(timer)}</span>
-        </div>
-
-        {/* Waveform */}
-        <canvas
-          ref={canvasRef}
-          className="w-full h-20 rounded-lg bg-neutral-800 overflow-hidden mb-4 relative"
-        />
+        </div>       
 
         {/* Transcription Area */}
         <div className="flex-1 overflow-y-auto space-y-4 mb-4">
@@ -484,9 +395,9 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
                         : 'bg-neutral-600 text-neutral-300'
                     }`}
                   >
-                    <p className="text-sm">{item.data?.text ?? 'No message content'}</p>
+                    <p className="text-sm">{item.title ?? 'No message content'}</p>
                     <p className="text-xs text-neutral-400 mt-1">
-                      {new Date(item.timestamp).toLocaleTimeString()}
+                      {item.timestamp}
                     </p>
                   </div>
                 </div>
