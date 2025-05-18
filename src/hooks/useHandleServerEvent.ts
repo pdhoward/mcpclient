@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { ServerEvent, SessionStatus, AgentConfig } from "@/lib/types";
-import { useTranscript } from "@/contexts/TranscriptContext";
-import { useEvent } from "@/contexts/EventContext";
-import { useRef } from "react";
+import { ServerEvent, SessionStatus, AgentConfig } from '@/lib/types';
+import { useTranscript } from '@/contexts/TranscriptContext';
+import { useEvent } from '@/contexts/EventContext';
+import { useRef } from 'react';
 
 export interface UseHandleServerEventParams {
   setSessionStatus: (status: SessionStatus) => void;
@@ -52,15 +52,15 @@ export function useHandleServerEvent({
       );
 
       sendClientEvent({
-        type: "conversation.item.create",
+        type: 'conversation.item.create',
         item: {
-          type: "function_call_output",
+          type: 'function_call_output',
           call_id: functionCallParams.call_id,
           output: JSON.stringify(fnResult),
         },
       });
-      sendClientEvent({ type: "response.create" });
-    } else if (functionCallParams.name === "transferAgents") {
+      sendClientEvent({ type: 'response.create' });
+    } else if (functionCallParams.name === 'transferAgents') {
       const destinationAgent = args.destination_agent;
       const newAgentConfig =
         selectedAgentConfigSet?.find((a) => a.name === destinationAgent) || null;
@@ -72,9 +72,9 @@ export function useHandleServerEvent({
         did_transfer: !!newAgentConfig,
       };
       sendClientEvent({
-        type: "conversation.item.create",
+        type: 'conversation.item.create',
         item: {
-          type: "function_call_output",
+          type: 'function_call_output',
           call_id: functionCallParams.call_id,
           output: JSON.stringify(functionCallOutput),
         },
@@ -91,80 +91,86 @@ export function useHandleServerEvent({
       );
 
       sendClientEvent({
-        type: "conversation.item.create",
+        type: 'conversation.item.create',
         item: {
-          type: "function_call_output",
+          type: 'function_call_output',
           call_id: functionCallParams.call_id,
           output: JSON.stringify(simulatedResult),
         },
       });
-      sendClientEvent({ type: "response.create" });
+      sendClientEvent({ type: 'response.create' });
     }
   };
 
   const handleServerEvent = (serverEvent: ServerEvent) => {
     logServerEvent(serverEvent);
+    console.log(`Handling server event: type=${serverEvent.type}, item_id=${serverEvent.item_id}, transcript=${serverEvent.transcript}`);
 
     switch (serverEvent.type) {
-      case "session.created": {
+      case 'session.created': {
         if (serverEvent.session?.id) {
-          setSessionStatus("CONNECTED");
+          setSessionStatus('CONNECTED');
           addTranscriptBreadcrumb(
-            `session.id: ${
-              serverEvent.session.id
-            }\nStarted at: ${new Date().toLocaleString()}`
+            `session.id: ${serverEvent.session.id}\nStarted at: ${new Date().toLocaleString()}`
           );
         }
         break;
       }
 
-      case "conversation.item.created": {
+      case 'conversation.item.created': {
         let text =
           serverEvent.item?.content?.[0]?.text ||
           serverEvent.item?.content?.[0]?.transcript ||
-          "";
-        const role = serverEvent.item?.role as "user" | "assistant";
+          '';
+        const role = serverEvent.item?.role as 'user' | 'assistant';
         const itemId = serverEvent.item?.id;
 
         if (itemId && transcriptItems.some((item) => item.itemId === itemId)) {
+          console.log(`Skipping duplicate conversation.item.created: itemId=${itemId}`);
           break;
         }
 
         if (itemId && role) {
-          if (role === "user" && !text) {
-            text = "[Transcribing...]";
+          if (role === 'user' && !text) {
+            text = '[Transcribing...]';
           }
+          console.log(`Adding transcript message: itemId=${itemId}, role=${role}, text=${text}`);
           addTranscriptMessage(itemId, role, text);
         }
         break;
       }
 
-      case "conversation.item.input_audio_transcription.completed": {
+      case 'conversation.item.input_audio_transcription.completed': {
         const itemId = serverEvent.item_id;
         const finalTranscript =
-          !serverEvent.transcript || serverEvent.transcript === "\n"
-            ? "[inaudible]"
+          !serverEvent.transcript || serverEvent.transcript.trim() === ''
+            ? '[No transcription available]'
             : serverEvent.transcript;
         if (itemId) {
+          console.log(`Updating user transcription: itemId=${itemId}, finalTranscript=${finalTranscript}`);
           updateTranscriptMessage(itemId, finalTranscript, false);
+          updateTranscriptItemStatus(itemId, 'DONE');
+        } else {
+          console.warn('No item_id for transcription.completed event:', serverEvent);
         }
         break;
       }
 
-      case "response.audio_transcript.delta": {
+      case 'response.audio_transcript.delta': {
         const itemId = serverEvent.item_id;
-        const deltaText = serverEvent.delta || "";
+        const deltaText = serverEvent.delta || '';
         if (itemId) {
+          console.log(`Appending transcript delta: itemId=${itemId}, deltaText=${deltaText}`);
           updateTranscriptMessage(itemId, deltaText, true);
         }
         break;
       }
 
-      case "response.done": {
+      case 'response.done': {
         if (serverEvent.response?.output) {
-          serverEvent.response.output.forEach((outputItem) => {
+          serverEvent.response.output.forEach((outputItem: any) => {
             if (
-              outputItem.type === "function_call" &&
+              outputItem.type === 'function_call' &&
               outputItem.name &&
               outputItem.arguments
             ) {
@@ -179,15 +185,17 @@ export function useHandleServerEvent({
         break;
       }
 
-      case "response.output_item.done": {
+      case 'response.output_item.done': {
         const itemId = serverEvent.item?.id;
         if (itemId) {
-          updateTranscriptItemStatus(itemId, "DONE");
+          console.log(`Marking item as DONE: itemId=${itemId}`);
+          updateTranscriptItemStatus(itemId, 'DONE');
         }
         break;
       }
 
       default:
+        console.log(`Unhandled server event type: ${serverEvent.type}`);
         break;
     }
   };

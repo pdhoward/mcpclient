@@ -341,6 +341,43 @@ export interface TranscriptItem {
 }
 
 
+export interface ServerEvent {
+  type: string;
+  event_id?: string;
+  item_id?: string;
+  transcript?: string;
+  delta?: string;
+  session?: {
+    id?: string;
+  };
+  item?: {
+    id?: string;
+    object?: string;
+    type?: string;
+    status?: string;
+    name?: string;
+    arguments?: string;
+    role?: "user" | "assistant";
+    content?: {
+      type?: string;
+      transcript?: string | null;
+      text?: string;
+    }[];
+  };
+  response?: {
+    output?: {
+      type?: string;
+      name?: string;
+      arguments?: any;
+      call_id?: string;
+    }[];
+    status_details?: {
+      error?: any;
+    };
+  };
+}
+
+
 // Export types
 export type AgentProfile = z.infer<typeof AgentProfileSchema>;
 export type AgentPrompt = z.infer<typeof AgentPromptSchema>
