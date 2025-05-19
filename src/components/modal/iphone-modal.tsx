@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { FaPhone, FaPhoneSlash, FaMicrophone, FaMicrophoneSlash, FaEye, FaUserPlus, FaFileExport, FaTimes } from 'react-icons/fa';
+import { FaPhone, FaPhoneSlash, FaMicrophone, FaMicrophoneSlash, FaEye, FaUserPlus, FaFileExport, FaTimes, FaDownload } from 'react-icons/fa';
 import { HiOutlineArrowUpRight } from 'react-icons/hi2';
 import clsx from 'clsx';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -12,7 +12,7 @@ interface IPhoneModalProps {
   onClose: () => void;
   onStartCall: () => void;
   onEndCall: () => void;
-  onEndSession: () => void;  // this closed the modal
+  onEndSession: () => void;
   onMute: () => void;
   isMuted: boolean;
   isCallActive: boolean;
@@ -20,6 +20,7 @@ interface IPhoneModalProps {
   onToggleTranscription: () => void;
   showTranscription: boolean;
   logs: TranscriptItem[];
+  transcriptItems?: TranscriptItem[]; // Added for download
   children: React.ReactNode;
 }
 
@@ -36,6 +37,7 @@ const IPhoneModal: React.FC<IPhoneModalProps> = ({
   onToggleTranscription,
   showTranscription,
   logs,
+  transcriptItems,
   children,
 }) => {
   const [textInput, setTextInput] = useState('');
@@ -48,7 +50,23 @@ const IPhoneModal: React.FC<IPhoneModalProps> = ({
     }
   };
 
-  // Filter logs based on search query
+  // Download transcription as a text file
+  const downloadTranscription = () => {
+    if (!transcriptItems) return
+    const transcriptText = transcriptItems
+      .filter((item) => item.type === 'MESSAGE' && !item.isHidden)
+      .map((item) => `${item.role === 'user' ? 'User' : 'Assistant'} (${item.timestamp}): ${item.title || 'No message content'}`)
+      .join('\n');
+
+    const blob = new Blob([transcriptText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `transcription_${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const filteredLogs = logs.filter((log) =>
     log.data?.text?.toLowerCase().includes(logSearchQuery.toLowerCase())
   );
@@ -62,19 +80,11 @@ const IPhoneModal: React.FC<IPhoneModalProps> = ({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
-      {/* iPhone Frame */}
       <div className="relative w-[300px] h-[600px] bg-neutral-900 rounded-[40px] border-4 border-neutral-800 shadow-2xl overflow-hidden">
-        {/* iPhone Notch */}
         <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-24 h-6 bg-neutral-800 rounded-b-xl z-10" />
-
-        {/* Screen Content */}
         <div className="absolute top-8 bottom-0 left-0 right-0 flex flex-col">
-          {/* Render MetaAgent's content */}
           <div className="flex-1 overflow-y-auto p-4">{children}</div>
-
-          {/* Bottom Controls */}
           <div className="p-4 space-y-3">
-            {/* Integrated Dynamic Island Section */}
             <article>
               <div
                 className={clsx(
@@ -95,12 +105,9 @@ const IPhoneModal: React.FC<IPhoneModalProps> = ({
                         )}
                       </button>
                       <div className="flex items-center gap-x-2">
-                        {/* Select Voice Button */}
                         <Dialog>
                           <DialogTrigger asChild>
-                            <button
-                              className="p-2 rounded-full bg-neutral-600 text-white"
-                            >
+                            <button className="p-2 rounded-full bg-neutral-600 text-white">
                               <FaUserPlus />
                             </button>
                           </DialogTrigger>
@@ -113,13 +120,9 @@ const IPhoneModal: React.FC<IPhoneModalProps> = ({
                             </div>
                           </DialogContent>
                         </Dialog>
-
-                        {/* Show System Logs Button */}
                         <Dialog>
                           <DialogTrigger asChild>
-                            <button
-                              className="p-2 rounded-full bg-neutral-600 text-white"
-                            >
+                            <button className="p-2 rounded-full bg-neutral-600 text-white">
                               <FaFileExport />
                             </button>
                           </DialogTrigger>
@@ -149,6 +152,13 @@ const IPhoneModal: React.FC<IPhoneModalProps> = ({
                             </div>
                           </DialogContent>
                         </Dialog>
+                        <button
+                          onClick={downloadTranscription}
+                          className="p-2 rounded-full bg-neutral-600 text-white"
+                          title="Download Transcription"
+                        >
+                          <FaDownload />
+                        </button>
                       </div>
                       <button
                         onClick={onEndCall}
@@ -166,14 +176,13 @@ const IPhoneModal: React.FC<IPhoneModalProps> = ({
                         <FaPhone className="text-white" />
                       </button>
                       <button
-                          onClick={onEndSession}
-                          className="p-2 rounded-full bg-gray-600"
-                          title="End Session"
-                        >
-                          <FaTimes className="text-white" /> {/* New icon for end session */}
+                        onClick={onEndSession}
+                        className="p-2 rounded-full bg-gray-600"
+                        title="End Session"
+                      >
+                        <FaTimes className="text-white" />
                       </button>
                     </>
-                    
                   )}
                 </div>
               </div>
@@ -199,8 +208,6 @@ const IPhoneModal: React.FC<IPhoneModalProps> = ({
                 </a>
               </div>
             </article>
-
-            {/* Text Input and Transcription Toggle */}
             <div className="flex items-center space-x-3">
               <input
                 type="text"
@@ -220,8 +227,6 @@ const IPhoneModal: React.FC<IPhoneModalProps> = ({
           </div>
         </div>
       </div>
-
-      {/* Close Button */}
       <button
         onClick={onClose}
         className="absolute top-4 right-4 text-white text-2xl"
