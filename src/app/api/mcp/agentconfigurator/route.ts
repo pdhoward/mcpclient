@@ -20,7 +20,10 @@ const origin = 'https://chaotic.ngrok.io';
 // Fetch data from MCP server
 async function fetchAgentProfiles(ids?: string[]): Promise<AgentProfile[]> {
   const url = new URL(`${origin}/agents`);
+  console.log(`------------inside of the api ------`)
   if (ids) url.searchParams.append("id", ids.join(","));
+  console.log(ids)
+  console.log(url)
   const response = await fetch(url, {
     method: "GET",
     headers: { "Content-Type": "application/json" },

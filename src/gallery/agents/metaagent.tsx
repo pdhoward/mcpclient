@@ -42,7 +42,9 @@ async function fetchAgentConfig(agent: string): Promise<AgentConfig[]> {
       const errorText = await response.text();
       throw new Error(`Failed to fetch agent config: ${response.status} - ${errorText}`);
     }
-    const data = await response.json();    
+    const data = await response.json();  
+    console.log(`-----agent configuration----`)  
+    console.log(data)
     return data;
   } catch (error: any) {
     console.error('Error fetching agent config:', error.message, error);
@@ -118,12 +120,7 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
       isHidden: false,
     };
   });
-
-   // Log transcriptItems and logs for debugging
-  useEffect(() => {
-    console.log('transcriptItems:', JSON.stringify(transcriptItems, null, 2));
-    console.log('logs:', JSON.stringify(logs, null, 2));
-  }, [transcriptItems, logs]);
+ 
 
   // Timer Logic
   useEffect(() => {
