@@ -372,7 +372,7 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
         </div>       
 
         {/* Transcription Area */}
-        <div className="flex-1 overflow-y-auto space-y-2 mb-4 scrollbar-none">
+        <div className="flex-1 overflow-y-auto space-y-2 mb-4 no-scrollbar">
           {showTranscription ? (
             transcriptItems
               .filter((item) => item.type === 'MESSAGE' && !item.isHidden)
@@ -384,14 +384,14 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
                   }`}
                 >
                   <div
-                    className={`relative max-w-[70%] p-2 rounded-2xl ${
+                    className={`relative max-w-[70%] p-3 rounded-3xl shawdow-sm ${
                       item.role === 'user'
                         ? 'bg-blue-600 text-white'
                         : 'bg-neutral-700 text-neutral-200'
                     } ${
                       item.role === 'user'
-                        ? 'pr-4 rounded-br-none after:content-[""] after:absolute after:bottom-0 after:right-[-6px] after:border-[6px] after:border-transparent after:border-l-blue-600 after:border-b-blue-600'
-                        : 'pl-4 rounded-bl-none after:content-[""] after:absolute after:bottom-0 after:left-[-6px] after:border-[6px] after:border-transparent after:border-r-neutral-700 after:border-b-neutral-700'
+                        ? 'pr-4 after:content-[""] after:absolute after:bottom-0 after:right-[-6px] after:border-[6px] after:border-transparent after:border-l-blue-600 after:border-b-blue-600'
+                        : 'pl-4 after:content-[""] after:absolute after:bottom-0 after:left-[-6px] after:border-[6px] after:border-transparent after:border-r-neutral-700 after:border-b-neutral-700'
                     }`}
                   >
                     <p className="text-xs">{item.title ?? 'No message content'}</p>

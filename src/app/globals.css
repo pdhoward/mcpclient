@@ -58,8 +58,8 @@
   }
 }
 
-@layer base {
-  * {
+@layer base { 
+   * {
     @apply border-border;
   }
   body {
@@ -72,6 +72,14 @@
 }
 
 @layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+
   .animate-flip {
     animation: flip 3.6s infinite steps(2, end);
   }
