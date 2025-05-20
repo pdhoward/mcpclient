@@ -173,7 +173,7 @@ const ChatPage = () => {
         onClose={() => setIsIslandOpen(false)}
         onAgentSelect={handleAgentSelect}
       />
-      <div className="container mx-auto px-4 py-16 flex-grow">
+      <div className="container mx-auto px-4 py-16 grow">
         <div className="flex flex-col items-center justify-center text-center space-y-8">
           <CloudSun className="h-20 w-20 text-sky-400" />
           <h1 className="text-4xl font-bold text-white">MCP Control Panel</h1>

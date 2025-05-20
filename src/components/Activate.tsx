@@ -82,7 +82,7 @@ const ActivateButton: React.FC<ActivateButtonProps> = ({ onClick, disabled, load
                 strokeLinejoin="round"
               />
             </svg>
-            <span className="text-sm translate-x-[2%] -translate-y-[6%] bg-gradient-to-r from-[hsl(0,0%,65%)] to-[hsl(0,0%,26%)] hover:bg-gradient-to-r hover:from-[hsl(0,0%,100%)] hover:to-[hsl(0,0%,100%)] focus-visible:bg-gradient-to-r focus-visible:from-[hsl(0,0%,100%)] focus-visible:to-[hsl(0,0%,100%)] bg-clip-text transition-colors duration-250">
+            <span className="text-sm translate-x-[2%] -translate-y-[6%] bg-linear-to-r from-[hsl(0,0%,65%)] to-[hsl(0,0%,26%)] hover:bg-linear-to-r hover:from-[hsl(0,0%,100%)] hover:to-[hsl(0,0%,100%)] focus-visible:bg-linear-to-r focus-visible:from-[hsl(0,0%,100%)] focus-visible:to-[hsl(0,0%,100%)] bg-clip-text transition-colors duration-250">
               Voice Agent Gallery
             </span>
           </>
@@ -97,7 +97,7 @@ const ActivateButton: React.FC<ActivateButtonProps> = ({ onClick, disabled, load
         {Array.from({ length: 10 }).map((_, i) => (
           <svg
             key={i}
-            className={`particle w-[calc(var(--size,0.25)*1rem)] aspect-square absolute top-[calc(var(--y)*1%)] left-[calc(var(--x)*1%)] opacity-[var(--alpha,1)] animate-float-out [animation-duration:calc(var(--duration,1)*1s)] [animation-delay:calc(var(--delay,1)*-1s)] [transform-origin:var(--origin-x,1000%)_var(--origin-y,1000%)] z-[-1] ${i % 2 === 0 ? 'animate-[float-out_reverse]' : ''}`}
+            className={`particle w-[calc(var(--size,0.25)*1rem)] aspect-square absolute top-[calc(var(--y)*1%)] left-[calc(var(--x)*1%)] opacity-(--alpha,1) animate-float-out [animation-duration:calc(var(--duration,1)*1s)] [animation-delay:calc(var(--delay,1)*-1s)] origin-[var(--origin-x,1000%)_var(--origin-y,1000%)] z-[-1] ${i % 2 === 0 ? 'animate-[float-out_reverse]' : ''}`}
             viewBox="0 0 15 15"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"

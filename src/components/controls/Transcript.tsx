@@ -158,7 +158,7 @@ function Transcript({
         </div>
       </div>
 
-      <div className="p-4 flex items-center gap-x-2 flex-shrink-0 border-t border-gray-200">
+      <div className="p-4 flex items-center gap-x-2 shrink-0 border-t border-gray-200">
         <input
           ref={inputRef}
           type="text"

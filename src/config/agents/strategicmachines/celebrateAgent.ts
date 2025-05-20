@@ -81,7 +81,7 @@ const celebrateAgent: AgentConfig = {
 
           const mainElement = document.querySelector("main");
           if (mainElement) {
-            mainElement.classList.remove("bg-gradient-to-b", "from-gray-50", "to-white");
+            mainElement.classList.remove("bg-linear-to-b", "from-gray-50", "to-white");
             const originalBg = mainElement.style.backgroundColor;
 
             const changeColor = () => {

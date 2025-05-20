@@ -204,7 +204,7 @@ const IPhoneModal: React.FC<IPhoneModalProps> = ({
                   rel="noreferrer"
                 >
                   Learn More
-                  <HiOutlineArrowUpRight className="ml-1 mt-[1px] text-xs text-neutral-500" />
+                  <HiOutlineArrowUpRight className="ml-1 mt-px text-xs text-neutral-500" />
                 </a>
               </div>
             </article>
