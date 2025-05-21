@@ -177,7 +177,7 @@ const ChatPage = () => {
         <div className="flex flex-col items-center justify-center text-center space-y-8">
           <CloudSun className="h-20 w-20 text-sky-400" />
           <h1 className="text-4xl font-bold text-white">MCP Control Panel</h1>
-          <div className="relative w-108 h-20">
+          <div className="flex items-center justify-center">
             <ActivateButton
               onClick={() => setIsIslandOpen(true)}
               disabled={profileLoading}

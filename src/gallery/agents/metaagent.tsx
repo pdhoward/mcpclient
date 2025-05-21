@@ -21,9 +21,7 @@ interface MetaAgentProps extends AgentComponentProps {
 let x = 0
 
 async function fetchAgentConfig(agent: string): Promise<AgentConfig[]> {
-  console.log(`-----------debug fetch agent config --------`)
-  x++
-  console.log(`fetch config for ${agent} for the time #${x}`)
+  
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
@@ -42,9 +40,7 @@ async function fetchAgentConfig(agent: string): Promise<AgentConfig[]> {
       const errorText = await response.text();
       throw new Error(`Failed to fetch agent config: ${response.status} - ${errorText}`);
     }
-    const data = await response.json();  
-    console.log(`-----agent configuration----`)  
-    console.log(data)
+    const data = await response.json();     
     return data;
   } catch (error: any) {
     console.error('Error fetching agent config:', error.message, error);
