@@ -109,6 +109,33 @@ export async function GET(request: Request) {
     );
   }
 
+   if (agentName.toLowerCase() === 'strategicmachines') {
+    try {
+      const url = new URL(`${origin}/machine`);
+      console.log(`Fetching machine config: ${url}`);
+      const response = await fetch(url, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to fetch machine config: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();     
+
+      
+      return Response.json(data);
+    } catch (error) {
+      console.error(`Error fetching strategicmachines config:`, error);
+      return new Response(
+        JSON.stringify({ error: 'Failed to fetch strategicmachines config' }),
+        { status: 500 }
+      );
+    }
+  }
+
   let client;
   try {
     client = await getClient();
