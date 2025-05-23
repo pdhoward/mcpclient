@@ -53,49 +53,6 @@ async function fetchStateMachines(agentIds?: string[]): Promise<{ agentId: strin
   return stateMachinesArray;
 }
 
-// Utility function to convert input schema to a Zod schema
-function inputSchemaToZodSchema(inputSchema: LibraryTool['inputSchema']): z.ZodType<any> {
-  const properties: Record<string, z.ZodType<any>> = {};
-
-  for (const [key, param] of Object.entries(inputSchema.properties)) {
-    let schema: z.ZodType<any>;
-
-    switch (param.type) {
-      case 'string':
-        schema = z.string();
-        if (param.enum) {
-          schema = z.enum(param.enum as [string, ...string[]]);
-        }
-        break;
-      case 'number':
-        schema = z.number();
-        if (param.minimum !== undefined) {
-          schema = (schema as z.ZodNumber).min(param.minimum);
-        }
-        if (param.maximum !== undefined) {
-          schema = (schema as z.ZodNumber).max(param.maximum);
-        }
-        break;
-      case 'boolean':
-        schema = z.boolean();
-        break;
-      case 'object':
-        schema = z.object({});
-        break;
-      default:
-        schema = z.any();
-    }
-
-    if (inputSchema.required?.includes(key)) {
-      properties[key] = schema;
-    } else {
-      properties[key] = schema.optional();
-    }
-  }
-
-  return z.object(properties);
-}
-
 // Create a persistent Client instance
 let clientInstance: Client<any, any, any> | null = null;
 
@@ -164,7 +121,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Fetch all profiles to find the target agent and its downstream agents
+    // Fetch all profiles to find the selected agent and its downstream agents
     const profiles = await fetchAgentProfiles();
     console.log('Profiles:', JSON.stringify(profiles.map(p => ({ id: p.id, name: p.name, downstreamAgentIds: p.downstreamAgentIds })), null, 2));
     
@@ -176,7 +133,7 @@ export async function GET(request: Request) {
       );
     }
 
-    // Collect IDs for the target agent and all downstream agents
+    // Collect IDs for the selected target agent and all downstream agents
     const agentIds = collectAgentIds(targetProfile, profiles);
     console.log(`Collected agent IDs: ${agentIds}`);
 

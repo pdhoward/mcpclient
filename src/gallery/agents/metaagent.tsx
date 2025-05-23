@@ -245,8 +245,7 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
   }, [selectedAgentName, sessionStatus, userDisconnected]);
 
   useEffect(() => {
-    if (sessionStatus === 'CONNECTED' && selectedAgentConfigSet && selectedAgentName) {
-      console.log('Sending AgentConfig to OpenAI Live:', JSON.stringify(selectedAgentConfigSet, null, 2));
+    if (sessionStatus === 'CONNECTED' && selectedAgentConfigSet && selectedAgentName) {      
       updateSession(true);
     }
   }, [selectedAgentConfigSet, selectedAgentName, sessionStatus]);
