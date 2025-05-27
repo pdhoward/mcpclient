@@ -151,7 +151,7 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
     if (dataChannel) {
       const handleMessage = (e: MessageEvent) => {
         const event = JSON.parse(e.data);
-        console.log('Received event from OpenAI Live:', event);
+        //console.log('Received event from OpenAI Live:', event);
         if (event.type === 'tool-call') {
           const { toolName, args } = event;
           const agentConfig = selectedAgentConfigSet?.find(

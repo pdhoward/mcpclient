@@ -104,7 +104,7 @@ export function useHandleServerEvent({
 
   const handleServerEvent = (serverEvent: ServerEvent) => {
     logServerEvent(serverEvent);
-    console.log(`Handling server event: type=${serverEvent.type}, item_id=${serverEvent.item_id}, transcript=${serverEvent.transcript}`);
+    //console.log(`Handling server event: type=${serverEvent.type}, item_id=${serverEvent.item_id}, transcript=${serverEvent.transcript}`);
 
     switch (serverEvent.type) {
       case 'session.created': {
@@ -126,7 +126,7 @@ export function useHandleServerEvent({
         const itemId = serverEvent.item?.id;
 
         if (itemId && transcriptItems.some((item) => item.itemId === itemId)) {
-          console.log(`Skipping duplicate conversation.item.created: itemId=${itemId}`);
+          //console.log(`Skipping duplicate conversation.item.created: itemId=${itemId}`);
           break;
         }
 
@@ -134,7 +134,7 @@ export function useHandleServerEvent({
           if (role === 'user' && !text) {
             text = '[Transcribing...]';
           }
-          console.log(`Adding transcript message: itemId=${itemId}, role=${role}, text=${text}`);
+          //console.log(`Adding transcript message: itemId=${itemId}, role=${role}, text=${text}`);
           addTranscriptMessage(itemId, role, text);
         }
         break;
@@ -147,7 +147,7 @@ export function useHandleServerEvent({
             ? '[No transcription available]'
             : serverEvent.transcript;
         if (itemId) {
-          console.log(`Updating user transcription: itemId=${itemId}, finalTranscript=${finalTranscript}`);
+          //console.log(`Updating user transcription: itemId=${itemId}, finalTranscript=${finalTranscript}`);
           updateTranscriptMessage(itemId, finalTranscript, false);
           updateTranscriptItemStatus(itemId, 'DONE');
         } else {
@@ -160,7 +160,7 @@ export function useHandleServerEvent({
         const itemId = serverEvent.item_id;
         const deltaText = serverEvent.delta || '';
         if (itemId) {
-          console.log(`Appending transcript delta: itemId=${itemId}, deltaText=${deltaText}`);
+          //console.log(`Appending transcript delta: itemId=${itemId}, deltaText=${deltaText}`);
           updateTranscriptMessage(itemId, deltaText, true);
         }
         break;
@@ -195,7 +195,7 @@ export function useHandleServerEvent({
       }
 
       default:
-        console.log(`Unhandled server event type: ${serverEvent.type}`);
+        //console.log(`Unhandled server event type: ${serverEvent.type}`);
         break;
     }
   };
