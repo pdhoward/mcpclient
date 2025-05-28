@@ -183,6 +183,12 @@ string,
 (args: any, transcriptLogsFiltered: TranscriptItem[]) => Promise<any> | any
 >;
 downstreamAgents?: AgentConfig[] | { name: string; publicDescription: string }[];
+metadata?: {
+    version: string;
+    updatedAt: string;
+    promptId?: string; // Link to MCP prompt
+    resources?: string[]; // URIs of linked resources
+  };
 }
 
 export type AllAgentConfigsType = Record<string, AgentConfig[]>;

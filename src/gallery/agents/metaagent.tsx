@@ -145,45 +145,54 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
       setIsMuted(audioElement.muted);
     }
   };
-
-  // Event Listeners for Tool Calls
+  ///////////////////////////////////////////////
+  /////     Event Listeners for Tool Calls   ///
+  /////////////////////////////////////////////
   useEffect(() => {
     if (dataChannel) {
-      const handleMessage = (e: MessageEvent) => {
+      const handleMessage = async (e: MessageEvent) => {
         const event = JSON.parse(e.data);
         //console.log('Received event from OpenAI Live:', event);
         if (event.type === 'tool-call') {
           const { toolName, args } = event;
+          console.log(`Handling tool-call for ${toolName} with args:`, args);
+          console.log('TranscriptItems:', transcriptItems); // Debug transcript
           const agentConfig = selectedAgentConfigSet?.find(
             (config) => config.name === selectedAgentName
           );
           const toolLogic = agentConfig?.toolLogic?.[toolName];
+          console.log(`Tool Logic is ${JSON.stringify(toolLogic)}`);
           if (toolLogic) {
             console.log(`Handling tool-call for ${toolName} with args:`, args);
-            toolLogic(args, transcriptItems).then((result: any) => {
-              console.log(`Tool ${toolName} executed, result:`, result);
-              sendClientEvent({
-                type: 'tool-result',
-                toolName,
-                result,
-              });
-            }).catch((error: any) => {
-              console.error(`Error executing tool ${toolName}:`, error);
-              sendClientEvent({
-                type: 'tool-result',
-                toolName,
-                result: {
-                  content: [
-                    {
-                      type: 'text',
-                      text: JSON.stringify({ error: error.message }),
-                    },
-                  ],
-                },
-              });
-            });
           } else {
-            console.error(`No toolLogic found for tool ${toolName}`);
+            console.log(`No tool logic detected for ${toolName}`);
+          }
+
+          try {
+             const response = await fetch('/api/mcp/execute-tool', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                toolName,
+                args: {
+                  relevantContextFromLastUserMessage: args.relevantContextFromLastUserMessage || '',
+                  transcriptLogs: transcriptItems,
+                },
+              }),
+            });
+            const result = await response.json();
+            if (!response.ok) {
+              throw new Error(result.error || `Failed to execute tool ${toolName}`);
+            }
+            console.log(`Tool ${toolName} executed, result:`, result);
+            sendClientEvent({
+              type: 'tool-result',
+              toolName,
+              result,
+            });
+
+          } catch(error){
+             console.error(`Error executing tool ${toolName}:`, error);
             sendClientEvent({
               type: 'tool-result',
               toolName,
@@ -191,12 +200,12 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
                 content: [
                   {
                     type: 'text',
-                    text: JSON.stringify({ error: `No toolLogic found for tool ${toolName}` }),
+                    text: JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
                   },
                 ],
               },
             });
-          }
+          }  
         }
         handleServerEventRef.current(event);
       };
@@ -213,7 +222,7 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
     if (activeAgent?.name && activeAgent.name !== hasFetchedConfig) {
       console.log('Fetching AgentConfig for:', activeAgent.name);
       fetchAgentConfig(activeAgent.name).then((agents) => {
-        console.log('Fetched AgentConfig:', JSON.stringify(agents, null, 2));
+        //console.log('Fetched AgentConfig:', JSON.stringify(agents, null, 2));
         const agentKeyToUse = agents[0]?.name || '';
         setSelectedAgentName(agentKeyToUse);
         setSelectedAgentConfigSet(agents);
