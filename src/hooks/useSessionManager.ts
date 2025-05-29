@@ -7,17 +7,13 @@ import { useTranscript } from '@/contexts/TranscriptContext';
 import { useEvent } from '@/contexts/EventContext';
 import { SessionStatus, AgentConfig } from '@/lib/types';
 
-interface UseSessionManagerProps {
-  selectedAgentName: string;
-  selectedAgentConfigSet: AgentConfig[] | null;
+interface UseSessionManagerProps {  
   isAudioPlaybackEnabled: boolean;
   sessionStatus: SessionStatus;
   setSessionStatus: (status: SessionStatus) => void;
 }
 
-export function useSessionManager({
-  selectedAgentName,
-  selectedAgentConfigSet,
+export function useSessionManager({  
   isAudioPlaybackEnabled,
   sessionStatus,
   setSessionStatus,

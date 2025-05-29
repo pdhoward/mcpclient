@@ -19,6 +19,7 @@ export function useAgentSession({
   sendClientEvent,
   sendSimulatedUserMessage
 }: UseAgentSessionProps) {
+
   const updateSession = (shouldTriggerResponse: boolean = false) => {
     sendClientEvent(
       { type: "input_audio_buffer.clear" },
@@ -42,10 +43,19 @@ export function useAgentSession({
     const instructions = currentAgent?.instructions || "";
     const tools = currentAgent?.tools || [];
 
+    console.log(`---------debug useAgentSession hook -----`)
+    console.log('Session instructions:', instructions);
+    console.log('Tools:', tools);
+
+    ///////////////////////////////////////////////
+    ////  sending an event update to OpenAI    ///
+    /////////////////////////////////////////////
+
     const sessionUpdateEvent = {
       type: "session.update",
       session: {
         modalities: ["text", "audio"],
+        model: "gpt-4o-realtime-preview",
         instructions,
         voice: "coral",
         input_audio_format: "pcm16",
@@ -53,8 +63,13 @@ export function useAgentSession({
         input_audio_transcription: { model: "whisper-1" },
         turn_detection: turnDetection,
         tools,
+        tool_choice: "required", // Force tool use - default is "auto"
+        temperature: 0.8,
+        max_response_output_tokens: "inf"
       },
     };
+
+    console.log('Sending session.update event:', JSON.stringify(sessionUpdateEvent, null, 2));
 
     sendClientEvent(sessionUpdateEvent);
 

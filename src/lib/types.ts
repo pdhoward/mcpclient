@@ -347,41 +347,350 @@ export interface TranscriptItem {
 }
 
 
-export interface ServerEvent {
-  type: string;
+// lib/types.ts
+
+// Common error structure for server events
+interface RealtimeError {
+  type: string; // e.g., "invalid_request_error"
+  code: string; // e.g., "invalid_event"
+  message: string;
+  param?: string | null;
   event_id?: string;
-  item_id?: string;
-  transcript?: string;
-  delta?: string;
-  session?: {
-    id?: string;
-  };
-  item?: {
-    id?: string;
-    object?: string;
-    type?: string;
-    status?: string;
-    name?: string;
-    arguments?: string;
-    role?: "user" | "assistant";
-    content?: {
-      type?: string;
-      transcript?: string | null;
-      text?: string;
-    }[];
-  };
-  response?: {
-    output?: {
-      type?: string;
-      name?: string;
-      arguments?: any;
-      call_id?: string;
-    }[];
-    status_details?: {
-      error?: any;
+}
+
+// Tool definition (aligned with OpenAI's function schema)
+interface RealtimeTool {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    parameters: {
+      type: 'object';
+      properties: Record<string, { type: string; description?: string }>;
+      required?: string[];
+      additionalProperties?: boolean;
     };
   };
 }
+
+// Session configuration
+interface RealtimeSession {
+  id: string;
+  object: 'realtime.session';
+  model: string; // e.g., "gpt-4o-realtime-preview"
+  modalities: ('text' | 'audio')[];
+  instructions: string;
+  voice: 'alloy' | 'ash' | 'ballad' | 'coral' | 'echo' | 'sage' | 'shimmer' | 'verse';
+  input_audio_format: 'pcm16' | 'g711_ulaw' | 'g711_alaw';
+  output_audio_format: 'pcm16' | 'g711_ulaw' | 'g711_alaw';
+  input_audio_transcription: {
+    model: 'whisper-1';
+    language?: string | null;
+    prompt?: string;
+  } | null;
+  turn_detection: {
+    type: 'server_vad';
+    threshold: number;
+    prefix_padding_ms: number;
+    silence_duration_ms: number;
+    create_response: boolean;
+  } | null;
+  tools: RealtimeTool[];
+  tool_choice: 'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } };
+  temperature: number;
+  max_response_output_tokens: number | 'inf';
+  client_secret?: {
+    value: string;
+    expires_at: number;
+  };
+}
+
+// Conversation resource
+interface RealtimeConversation {
+  id: string;
+  object: 'realtime.conversation';
+}
+
+// Content part for items
+interface ContentPart {
+  type: 'text' | 'audio' | 'input_text' | 'input_audio';
+  text?: string;
+  transcript?: string | null;
+  audio?: string; // Base64-encoded audio
+}
+
+// Conversation item
+interface RealtimeItem {
+  id: string;
+  object: 'realtime.item';
+  type: 'message' | 'function_call' | 'function_call_output';
+  status: 'in_progress' | 'completed';
+  role?: 'user' | 'assistant';
+  content?: ContentPart[];
+  call_id?: string;
+  name?: string;
+  arguments?: string; // JSON string
+  output?: string; // JSON string for function_call_output
+}
+
+// Response resource
+interface RealtimeResponse {
+  id: string;
+  object: 'realtime.response';
+  status: 'in_progress' | 'completed' | 'cancelled' | 'failed';
+  status_details: { type: 'error'; error: RealtimeError } | null;
+  output: RealtimeItem[];
+  usage: {
+    total_tokens: number;
+    input_tokens: number;
+    output_tokens: number;
+    input_token_details: {
+      cached_tokens: number;
+      text_tokens: number;
+      audio_tokens: number;
+      cached_tokens_details: {
+        text_tokens: number;
+        audio_tokens: number;
+      };
+    };
+    output_token_details: {
+      text_tokens: number;
+      audio_tokens: number;
+    };
+  } | null;
+}
+
+// Log probabilities for transcriptions
+interface LogProb {
+  token: string;
+  logprob: number;
+  bytes: number[] | null;
+}
+
+// Rate limit information
+interface RateLimit {
+  name: string;
+  limit: number;
+  remaining: number;
+  reset_seconds: number;
+}
+
+// Transcription session configuration
+interface RealtimeTranscriptionSession {
+  id: string;
+  object: 'realtime.transcription_session';
+  expires_at?: number;
+  modalities: ('text' | 'audio')[];
+  input_audio_format: 'pcm16' | 'g711_ulaw' | 'g711_alaw';
+  input_audio_transcription: {
+    model: 'gpt-4o-transcribe';
+    language?: string | null;
+    prompt?: string;
+  };
+  turn_detection: {
+    type: 'server_vad';
+    threshold: number;
+    prefix_padding_ms: number;
+    silence_duration_ms: number;
+    create_response: boolean;
+  } | null;
+  input_audio_noise_reduction?: { type: 'near_field' } | null;
+  include?: string[];
+  client_secret?: {
+    value: string;
+    expires_at: number;
+  } | null;
+}
+
+// Discriminated union for server events
+export type ServerEvent =
+  | {
+      type: 'error';
+      event_id: string;
+      error: RealtimeError;
+    }
+  | {
+      type: 'session.created' | 'session.updated';
+      event_id: string;
+      session: RealtimeSession;
+    }
+  | {
+      type: 'conversation.created';
+      event_id: string;
+      conversation: RealtimeConversation;
+    }
+  | {
+      type: 'conversation.item.created' | 'conversation.item.retrieved';
+      event_id: string;
+      previous_item_id?: string;
+      item: RealtimeItem;
+    }
+  | {
+      type: 'conversation.item.input_audio_transcription.completed';
+      event_id: string;
+      item_id: string;
+      content_index: number;
+      transcript: string;
+      logprobs: LogProb[] | null;
+    }
+  | {
+      type: 'conversation.item.input_audio_transcription.delta';
+      event_id: string;
+      item_id: string;
+      content_index: number;
+      delta: string;
+      logprobs: LogProb[] | null;
+    }
+  | {
+      type: 'conversation.item.input_audio_transcription.failed';
+      event_id: string;
+      item_id: string;
+      content_index: number;
+      error: RealtimeError;
+    }
+  | {
+      type: 'conversation.item.truncated';
+      event_id: string;
+      item_id: string;
+      content_index: number;
+      audio_end_ms: number;
+    }
+  | {
+      type: 'conversation.item.deleted';
+      event_id: string;
+      item_id: string;
+    }
+  | {
+      type: 'input_audio_buffer.committed';
+      event_id: string;
+      previous_item_id?: string;
+      item_id: string;
+    }
+  | {
+      type: 'input_audio_buffer.cleared';
+      event_id: string;
+    }
+  | {
+      type: 'input_audio_buffer.speech_started';
+      event_id: string;
+      audio_start_ms: number;
+      item_id: string;
+    }
+  | {
+      type: 'input_audio_buffer.speech_stopped';
+      event_id: string;
+      audio_end_ms: number;
+      item_id: string;
+    }
+  | {
+      type: 'response.created' | 'response.done';
+      event_id: string;
+      response: RealtimeResponse;
+    }
+  | {
+      type: 'response.output_item.added' | 'response.output_item.done';
+      event_id: string;
+      response_id: string;
+      output_index: number;
+      item: RealtimeItem;
+    }
+  | {
+      type: 'response.content_part.added' | 'response.content_part.done';
+      event_id: string;
+      response_id: string;
+      item_id: string;
+      output_index: number;
+      content_index: number;
+      part: ContentPart;
+    }
+  | {
+      type: 'response.text.delta';
+      event_id: string;
+      response_id: string;
+      item_id: string;
+      output_index: number;
+      content_index: number;
+      delta: string;
+    }
+  | {
+      type: 'response.text.done';
+      event_id: string;
+      response_id: string;
+      item_id: string;
+      output_index: number;
+      content_index: number;
+      text: string;
+    }
+  | {
+      type: 'response.audio_transcript.delta';
+      event_id: string;
+      response_id: string;
+      item_id: string;
+      output_index: number;
+      content_index: number;
+      delta: string;
+    }
+  | {
+      type: 'response.audio_transcript.done';
+      event_id: string;
+      response_id: string;
+      item_id: string;
+      output_index: number;
+      content_index: number;
+      transcript: string;
+    }
+  | {
+      type: 'response.audio.delta';
+      event_id: string;
+      response_id: string;
+      item_id: string;
+      output_index: number;
+      content_index: number;
+      delta: string; // Base64-encoded audio
+    }
+  | {
+      type: 'response.audio.done';
+      event_id: string;
+      response_id: string;
+      item_id: string;
+      output_index: number;
+      content_index: number;
+    }
+  | {
+      type: 'response.function_call_arguments.delta';
+      event_id: string;
+      response_id: string;
+      item_id: string;
+      output_index: number;
+      call_id: string;
+      name: string;
+      delta: string; // JSON string
+    }
+  | {
+      type: 'response.function_call_arguments.done';
+      event_id: string;
+      response_id: string;
+      item_id: string;
+      output_index: number;
+      call_id: string;
+      name: string;
+      arguments: string; // JSON string
+    }
+  | {
+      type: 'transcription_session.updated';
+      event_id: string;
+      session: RealtimeTranscriptionSession;
+    }
+  | {
+      type: 'rate_limits.updated';
+      event_id: string;
+      rate_limits: RateLimit[];
+    }
+  | {
+      type: 'output_audio_buffer.started' | 'output_audio_buffer.stopped' | 'output_audio_buffer.cleared';
+      event_id: string;
+      response_id: string;
+    };
 
 
 // Export types

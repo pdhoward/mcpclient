@@ -24,7 +24,7 @@ export function useMappedMessages() {
    return {
      id: item.itemId,
      role,
-     timestamp: new Date(item.createdAtMs),
+     timestamp: item.createdAtMs, // Use numeric timestamp (milliseconds)
      type: item.type === "MESSAGE" ? "message" : "breadcrumb", // ✅ Match `Message` schema   
      context:
        role === "user"
@@ -46,7 +46,7 @@ export function useMappedMessages() {
   id: event.id.toString(),
   role: event.direction === "client" ? "user" : "assistant",
   type: event.eventName,
-  timestamp: new Date(event.timestamp),
+  timestamp: Date.parse(event.timestamp), // Convert ISO string to milliseconds
   text: JSON.stringify(event.eventData, null, 2), // ✅ Convert eventData to string
   isFinal: true, // ✅ Assume logs are final
   context: { message: "Logged Event", metadata: event.eventData }, // ✅ Ensure `context` exists

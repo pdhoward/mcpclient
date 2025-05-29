@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import IPhoneModal from '@/components/modal/iphone-modal';
 
 // Hooks
@@ -67,16 +67,17 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
   // Hooks
   const { transcriptItems } = useTranscript();
   const { logs: messageLogs, conversation } = useMappedMessages();
+
   const { connectionState, dataChannel, dcRef, connectToRealtime, disconnectFromRealtime, audioElement } =
-    useSessionManager({
-      selectedAgentName,
-      selectedAgentConfigSet,
+    useSessionManager({      
       isAudioPlaybackEnabled,
       sessionStatus,
       setSessionStatus,
     });
+
   const { sendClientEvent, sendSimulatedUserMessage, cancelAssistantSpeech, handleSendTextMessage } =
     useMessageHandler({ dcRef, sessionStatus });
+
   const { updateSession } = useAgentSession({
     selectedAgentName,
     selectedAgentConfigSet,
@@ -84,12 +85,22 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
     sendClientEvent,
     sendSimulatedUserMessage,
   });
+
   const { isPTTUserSpeaking, handleTalkButtonDown, handleTalkButtonUp } = usePTTHandler({
     sessionStatus,
     dataChannel,
     sendClientEvent,
     cancelAssistantSpeech,
   });
+
+  /////////////////////////////////////////////////////////
+  /// note the handleServerEventRef pattern ensures   ////
+  //  more efficient processing vs a pure function    ///
+  //  since the changes to any of the dependencies    //
+  //  will update the function in .current without   //
+  //   rerender or creating new function            //
+  ///////////////////////////////////////////////////
+
   const handleServerEventRef = useHandleServerEvent({
     setSessionStatus,
     selectedAgentName,
@@ -159,14 +170,7 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
           console.log('TranscriptItems:', transcriptItems); // Debug transcript
           const agentConfig = selectedAgentConfigSet?.find(
             (config) => config.name === selectedAgentName
-          );
-          const toolLogic = agentConfig?.toolLogic?.[toolName];
-          console.log(`Tool Logic is ${JSON.stringify(toolLogic)}`);
-          if (toolLogic) {
-            console.log(`Handling tool-call for ${toolName} with args:`, args);
-          } else {
-            console.log(`No tool logic detected for ${toolName}`);
-          }
+          );          
 
           try {
              const response = await fetch('/api/mcp/execute-tool', {
@@ -264,9 +268,7 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
       console.log('Updating session with PTT state:', isPTTActive);
       updateSession();
     }
-  }, [isPTTActive]);
-
- 
+  }, [isPTTActive]); 
 
   useEffect(() => {
     const storedPushToTalkUI = localStorage.getItem('pushToTalkUI');
