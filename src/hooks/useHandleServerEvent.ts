@@ -30,6 +30,9 @@ export function useHandleServerEvent({
   } = useTranscript();
   const { logServerEvent } = useEvent();
 
+  // Track processed call_ids to prevent recursive loops
+  const processedCallIds = useRef(new Set<string>());
+
   // Handle function call events (e.g., from response.function_call_arguments.done)
   const handleFunctionCall = async (functionCallParams: {
     name: string;
@@ -45,7 +48,17 @@ export function useHandleServerEvent({
       return;
     }
 
+    // Prevent recursive loop by checking call_id
+    if (call_id && processedCallIds.current.has(call_id)) {
+      console.warn(`Skipping duplicate function call: ${name}, call_id: ${call_id}`);
+      return;
+    }
+    if (call_id) {
+      processedCallIds.current.add(call_id);
+    }
+
     // Log function call details for debugging
+    console.log(`Processing function call: ${name}, call_id: ${call_id}, args:`, args);
     addTranscriptBreadcrumb(`Function call: ${name}`, { call_id, args });
 
     // Handle special case for agent transfer
@@ -82,10 +95,11 @@ export function useHandleServerEvent({
         output: JSON.stringify(simulatedResult),
       },
     });
+    // Use 'auto' to allow non-tool responses (e.g., greetings)
     sendClientEvent({
       type: 'response.create',
       response: {
-        tool_choice: 'required', // Force tool use in subsequent responses
+        tool_choice: 'auto',
       },
     });
   };
@@ -101,6 +115,7 @@ export function useHandleServerEvent({
       case 'session.created': {
         console.log('Session created:', JSON.stringify(serverEvent.session, null, 2));
         if (serverEvent.session?.id) {
+          console.log(`Setting session status to CONNECTED for session: ${serverEvent.session.id}`);
           setSessionStatus('CONNECTED');
           addTranscriptBreadcrumb(
             `Session ID: ${serverEvent.session.id}\nStarted at: ${new Date().toLocaleString()}`
@@ -132,6 +147,7 @@ export function useHandleServerEvent({
 
         if (itemId && role) {
           const displayText = role === 'user' && !text ? '[Transcribing...]' : text;
+          console.log(`Adding transcript message: ${itemId}, role: ${role}, text: ${displayText}`);
           addTranscriptMessage(itemId, role, displayText);
         }
         break;
@@ -301,9 +317,16 @@ export function useHandleServerEvent({
         break;
       }
 
+      // Rate limits updated
+      case 'rate_limits.updated': {
+        console.log('Rate limits updated:', serverEvent.rate_limits);
+        addTranscriptBreadcrumb('Rate limits updated', serverEvent.rate_limits);
+        break;
+      }
+
       // Error from server
       case 'error': {
-        console.error('Server error:', serverEvent.error);
+        console.error('Server error:', JSON.stringify(serverEvent.error, null, 2));
         addTranscriptBreadcrumb('Error occurred', serverEvent.error);
         break;
       }

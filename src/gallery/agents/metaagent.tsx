@@ -163,7 +163,10 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
     if (dataChannel) {
       const handleMessage = async (e: MessageEvent) => {
         const event = JSON.parse(e.data);
-        //console.log('Received event from OpenAI Live:', event);
+        console.log('Received event:', event);
+        if (event.type === 'error') {
+          console.error('WebRTC error:', JSON.stringify(event, null, 2));
+        }
         if (event.type === 'tool-call') {
           const { toolName, args } = event;
           console.log(`Handling tool-call for ${toolName} with args:`, args);

@@ -63,7 +63,7 @@ export function useAgentSession({
         input_audio_transcription: { model: "whisper-1" },
         turn_detection: turnDetection,
         tools,
-        tool_choice: "required", // Force tool use - default is "auto"
+        tool_choice: "auto", // Force tool use with "required"
         temperature: 0.8,
         max_response_output_tokens: "inf"
       },
