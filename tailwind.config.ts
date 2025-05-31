@@ -55,7 +55,18 @@ export default {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',
   			sm: 'calc(var(--radius) - 4px)'
-  		}
+  		},
+		aspectRatio: {
+        square: '1 / 1',
+		},
+		height: {
+			12: '3rem',
+			48: '12rem',
+		},
+		width: {
+			8: '2rem',
+			32: '8rem',
+		},
   	}
   },  
    plugins: [

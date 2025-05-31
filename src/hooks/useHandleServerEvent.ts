@@ -21,6 +21,7 @@ export function useHandleServerEvent({
   sendClientEvent,
   setSelectedAgentName,
 }: UseHandleServerEventParams) {
+
   const {
     transcriptItems,
     addTranscriptBreadcrumb,
@@ -28,6 +29,7 @@ export function useHandleServerEvent({
     updateTranscriptMessage,
     updateTranscriptItemStatus,
   } = useTranscript();
+  
   const { logServerEvent } = useEvent();
 
   // Track processed call_ids to prevent recursive loops

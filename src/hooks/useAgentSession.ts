@@ -1,7 +1,6 @@
 /**
  * Hook to manage agent session configuration and updates
  */
-import { useEffect } from 'react';
 import { AgentConfig } from '@/lib/types';
 
 interface UseAgentSessionProps {
