@@ -17,7 +17,7 @@ export function useMessageHandler({ dcRef, sessionStatus }: UseMessageHandlerPro
 
   const sendClientEvent = (eventObj: any, eventNameSuffix = "") => {
     console.log(`-----debug in useMessageHandler -----`)
-    console.log('Sending client event:', JSON.stringify(eventObj, null, 2), eventNameSuffix);
+    console.log('Send Client Event Triggered:', JSON.stringify(eventObj, null, 2), eventNameSuffix);
     if (dcRef.current && dcRef.current.readyState === "open") {     
       logClientEvent(eventObj, eventNameSuffix);
       dcRef.current.send(JSON.stringify(eventObj));

@@ -55,6 +55,7 @@ export function useHandleServerEvent({
       console.warn(`Skipping duplicate function call: ${name}, call_id: ${call_id}`);
       return;
     }
+
     if (call_id) {
       processedCallIds.current.add(call_id);
     }
@@ -97,6 +98,7 @@ export function useHandleServerEvent({
         output: JSON.stringify(simulatedResult),
       },
     });
+    
     // Use 'auto' to allow non-tool responses (e.g., greetings)
     sendClientEvent({
       type: 'response.create',
@@ -105,8 +107,9 @@ export function useHandleServerEvent({
       },
     });
   };
-
-  // Process server events from OpenAI Realtime API
+  ////////////////////////////////////////////////////////////
+  ///   Process Server Events from OpenAI Realtime API    ///
+  //////////////////////////////////////////////////////////
   const handleServerEvent = async (serverEvent: ServerEvent) => {
     // Log all server events for debugging
     logServerEvent(serverEvent);

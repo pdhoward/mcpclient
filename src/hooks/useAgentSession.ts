@@ -22,7 +22,7 @@ export function useAgentSession({
   const updateSession = (shouldTriggerResponse: boolean = false) => {
     sendClientEvent(
       { type: "input_audio_buffer.clear" },
-      "clear audio buffer on session update"
+      "useAgentSession trigger > clear audio buffer on session update"
     );
 
     const currentAgent = selectedAgentConfigSet?.find(
