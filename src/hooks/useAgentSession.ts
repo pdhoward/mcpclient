@@ -43,8 +43,8 @@ export function useAgentSession({
     const tools = currentAgent?.tools || [];
 
     console.log(`---------debug useAgentSession hook -----`)
-    console.log('Session instructions:', instructions);
-    console.log('Tools:', tools);
+    console.log('Session instructions:', instructions.slice(0, 16));;
+    console.log('Tools:', tools[0]?.name);
 
     ///////////////////////////////////////////////
     ////  sending an event update to OpenAI    ///
@@ -66,9 +66,7 @@ export function useAgentSession({
         temperature: 0.8,
         max_response_output_tokens: "inf"
       },
-    };
-
-    console.log('Sending session.update event:', JSON.stringify(sessionUpdateEvent, null, 2));
+    };    
 
     sendClientEvent(sessionUpdateEvent);
 
