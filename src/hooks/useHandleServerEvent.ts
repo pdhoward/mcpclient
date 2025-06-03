@@ -35,7 +35,10 @@ export function useHandleServerEvent({
   // Track processed call_ids to prevent recursive loops
   const processedCallIds = useRef(new Set<string>());
 
-  // Handle function call events (e.g., from response.function_call_arguments.done)
+  //////////////////////////////////////////////////////////////
+  /////            Event Listeners for Tool Calls           ///
+  //// triggered by 'response.function_call_arguments.done' //
+  ///////////////////////////////////////////////////////////
   const handleFunctionCall = async (functionCallParams: {
     name: string;
     call_id?: string;
@@ -87,19 +90,58 @@ export function useHandleServerEvent({
       return;
     }
 
-    // Fallback for unhandled tools (since tools are server-side)
-    const simulatedResult = { result: true };
-    addTranscriptBreadcrumb(`Function call fallback: ${name}`, simulatedResult);
-    sendClientEvent({
-      type: 'conversation.item.create',
-      item: {
-        type: 'function_call_output',
-        call_id,
-        output: JSON.stringify(simulatedResult),
-      },
-    });
+    try {
+      // filter transcript log for relevent messages only
+      const filteredTranscriptLogs = transcriptItems
+        .filter(item => item.type === 'MESSAGE')
+        .map(({ itemId, type, role, data, timestamp, createdAtMs, status }) => ({
+          itemId,
+          type,
+          role,
+          data: { text: data?.text || '' }, // Only text field
+          timestamp,
+          createdAtMs,
+          status,
+        }));
+      const response = await fetch('/api/mcp/execute-tool', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          toolName: name,
+          args: {
+            relevantContextFromLastUserMessage: args.relevantContextFromLastUserMessage || '',
+            transcriptLogs: filteredTranscriptLogs,
+          },
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `Failed to execute tool ${name}`);
+      }
+      console.log(`Tool ${name} executed, result:`, result);
+      sendClientEvent({
+        type: 'conversation.item.create',
+        item: {
+          type: 'function_call_output',
+          call_id,
+          output: JSON.stringify(result),
+        },
+      });
+    } catch (error) {
+      console.error(`Error executing tool ${name}:`, error);
+      sendClientEvent({
+        type: 'conversation.item.create',
+        item: {
+          type: 'function_call_output',
+          call_id,
+          output: JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
+        },
+      });
+    }
     
-    // Use 'auto' to allow non-tool responses (e.g., greetings)
+    ///////////////////////////////////////////////////
+    /// prompts openai to respond with tool output  //
+    /////////////////////////////////////////////////
     sendClientEvent({
       type: 'response.create',
       response: {
@@ -113,7 +155,7 @@ export function useHandleServerEvent({
   const handleServerEvent = async (serverEvent: ServerEvent) => {
     // Log all server events for debugging
     logServerEvent(serverEvent);
-    console.log(`Handling server event: ${serverEvent.type}`, serverEvent);
+    console.log(`----Entering Handle Server Event ----`);
 
     switch (serverEvent.type) {
       // Session created with initial configuration
