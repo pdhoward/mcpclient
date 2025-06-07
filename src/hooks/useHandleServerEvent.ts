@@ -93,16 +93,17 @@ export function useHandleServerEvent({
     try {
       // filter transcript log for relevent messages only
       const filteredTranscriptLogs = transcriptItems
-        .filter(item => item.type === 'MESSAGE')
-        .map(({ itemId, type, role, data, timestamp, createdAtMs, status }) => ({
+        .filter((item) => item.type === 'MESSAGE' && !item.isHidden)
+        .map(({ itemId, type, role, title, timestamp, createdAtMs, status }) => ({
           itemId,
           type,
           role,
-          data: { text: data?.text || '' }, // Only text field
+          transcript: title,
           timestamp,
           createdAtMs,
           status,
-        }));
+        }))
+      
       const response = await fetch('/api/mcp/execute-tool', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

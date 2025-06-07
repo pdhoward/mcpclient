@@ -156,9 +156,9 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
       setIsMuted(audioElement.muted);
     }
   };
-  ///////////////////////////////////////////////
-  /////     Event Listeners for Tool Calls   ///
-  /////////////////////////////////////////////
+   ///////////////////////////////////////////////
+  /////  Pipe Events for Web Page Rendering   ///
+  //////////////////////////////////////////////
   useEffect(() => {
     if (dataChannel) {
       const handleMessage = async (e: MessageEvent) => {
@@ -166,54 +166,7 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
         console.log('Received event:', event);
         if (event.type === 'error') {
           console.error('WebRTC error:', JSON.stringify(event, null, 2));
-        }
-        if (event.type === 'tool-call') {
-          const { toolName, args } = event;
-          console.log(`Handling tool-call for ${toolName} with args:`, args);
-          console.log('TranscriptItems:', transcriptItems); // Debug transcript
-          const agentConfig = selectedAgentConfigSet?.find(
-            (config) => config.name === selectedAgentName
-          );          
-
-          try {
-             const response = await fetch('/api/mcp/execute-tool', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                toolName,
-                args: {
-                  relevantContextFromLastUserMessage: args.relevantContextFromLastUserMessage || '',
-                  transcriptLogs: transcriptItems,
-                },
-              }),
-            });
-            const result = await response.json();
-            if (!response.ok) {
-              throw new Error(result.error || `Failed to execute tool ${toolName}`);
-            }
-            console.log(`Tool ${toolName} executed, result:`, result);
-            sendClientEvent({
-              type: 'tool-result',
-              toolName,
-              result,
-            });
-
-          } catch(error){
-             console.error(`Error executing tool ${toolName}:`, error);
-            sendClientEvent({
-              type: 'tool-result',
-              toolName,
-              result: {
-                content: [
-                  {
-                    type: 'text',
-                    text: JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
-                  },
-                ],
-              },
-            });
-          }  
-        }
+        }       
         handleServerEventRef.current(event);
       };
       dataChannel.addEventListener('message', handleMessage);
