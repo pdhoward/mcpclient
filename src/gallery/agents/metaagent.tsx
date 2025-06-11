@@ -157,8 +157,10 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
     }
   };
    ///////////////////////////////////////////////
-  /////  Pipe Events for Web Page Rendering   ///
-  //////////////////////////////////////////////
+  /////  Pipe Events from DataChannel to     ////
+  ////    handleServerEvent to Transcript   ////
+  ///   to process event and render webpage ///
+  ////////////////////////////////////////////
   useEffect(() => {
     if (dataChannel) {
       const handleMessage = async (e: MessageEvent) => {
@@ -172,7 +174,7 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
       dataChannel.addEventListener('message', handleMessage);
       return () => dataChannel.removeEventListener('message', handleMessage);
     }
-  }, [dataChannel, selectedAgentConfigSet, selectedAgentName, transcriptItems]);
+  }, [dataChannel]);
 
   ///////////////////////////////////////////////
   ///  action when new agent selected       ////

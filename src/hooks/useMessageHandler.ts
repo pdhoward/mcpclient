@@ -1,7 +1,7 @@
 /**
  * Hook to manage message handling and conversation flow
  */
-import { useRef } from 'react';
+
 import { v4 as uuidv4 } from 'uuid';
 import { useTranscript } from '@/contexts/TranscriptContext';
 import { useEvent } from '@/contexts/EventContext';
