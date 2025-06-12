@@ -136,6 +136,33 @@ export async function GET(request: Request) {
     }
   }
 
+   if (agentName.toLowerCase() === 'cypressresorts') {
+    try {
+      const url = new URL(`${origin}/cypress`);
+      console.log(`Fetching CypressResort config: ${url}`);
+      const response = await fetch(url, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to fetch cypress config: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();     
+
+      
+      return Response.json(data);
+    } catch (error) {
+      console.error(`Error fetching cypressresort config:`, error);
+      return new Response(
+        JSON.stringify({ error: 'Failed to fetch strategicmachines config' }),
+        { status: 500 }
+      );
+    }
+  }
+
   let client;
   try {
     client = await getClient();
