@@ -1,3 +1,17 @@
+## MCP CLIENT
+
+* USE MCP
+A lightweight React hook for connecting to Model Context Protocol (MCP) servers. Simplifies authentication and tool calling for AI systems implementing the MCP standard.
+
+https://github.com/modelcontextprotocol/use-mcp
+
+https://blog.cloudflare.com/connect-any-react-application-to-an-mcp-server-in-three-lines-of-code/
+
+* OPENAI AGENTS
+https://openai.github.io/openai-agents-js/guides/voice-agents/
+
+---------------------
+
 This is an example implementation of the Model Context Protocol SDK's client code with the Vercel AI SDK which simplifies handling an LLM chat in the browser. Check out [how to make your own mcp servers quick here](https://mcp-framework.com)
 
 ## How It Works

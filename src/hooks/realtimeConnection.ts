@@ -21,6 +21,9 @@ export async function createRealtimeConnection(
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
 
+  // new model
+  // gpt-4o-realtime-preview-2025-06-03
+
   const baseUrl = "https://api.openai.com/v1/realtime";
   const model = "gpt-4o-realtime-preview-2024-12-17";
 
