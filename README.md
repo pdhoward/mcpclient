@@ -10,7 +10,21 @@ https://blog.cloudflare.com/connect-any-react-application-to-an-mcp-server-in-th
 * OPENAI AGENTS
 https://openai.github.io/openai-agents-js/guides/voice-agents/
 
+https://x.com/OpenAIDevs/status/1929950678799266253
+
+* AGENT PRODUCTION
+https://github.com/NirDiamant/agents-towards-production
+
 ---------------------
+
+SUPABASE CONNECTION
+
+https://supabase.com/ui
+
+https://supabase.com/ui/docs/getting-started/introduction
+
+
+-----------------
 
 This is an example implementation of the Model Context Protocol SDK's client code with the Vercel AI SDK which simplifies handling an LLM chat in the browser. Check out [how to make your own mcp servers quick here](https://mcp-framework.com)
 
