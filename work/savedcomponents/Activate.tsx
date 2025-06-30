@@ -1,85 +1,43 @@
-'use client'
+'use client';
 
-import { useEffect, useRef } from 'react'
-import Loading from '@/components/Loading'
-import type { Agent } from '@/lib/types'
+import { useEffect, useRef } from 'react';
+import Loading from '@/components/Loading';
 
-/* -------------------------------------------------- */
-/* helpers                                            */
-/* -------------------------------------------------- */
-
-const rnd = (min: number, max: number) =>
-  Math.floor(Math.random() * (max - min + 1) + min)
-
-/* -------------------------------------------------- */
-/* props                                              */
-/* -------------------------------------------------- */
+const RANDOM = (min: number, max: number) =>
+  Math.floor(Math.random() * (max - min + 1) + min);
 
 interface ActivateButtonProps {
-  /** full agent list from `useAgentManager()` */
-  agents: Agent[]
-  /** 1-liner setter coming from `useAgentManager()` */
-  setActiveAgent: (agent: Agent) => void
-  /** flag ChatPage uses to show `<MetaAgent />` */
-  setIsAgentSelected: (v: boolean) => void
-  /** optional ui-state flags */
-  disabled?: boolean
-  loading?: boolean
+  onClick?: () => void;
+  disabled?: boolean;
+  loading?: boolean;
 }
 
-/* -------------------------------------------------- */
-/* component                                          */
-/* -------------------------------------------------- */
+const ActivateButton: React.FC<ActivateButtonProps> = ({ onClick, disabled, loading }) => {
+  const particlePenRef = useRef<HTMLDivElement>(null);
 
-export default function ActivateButton ({
-  agents,
-  setActiveAgent,
-  setIsAgentSelected,
-  disabled,
-  loading,
-}: ActivateButtonProps) {
-  const particlePenRef = useRef<HTMLDivElement>(null)
-
-  /* one-time particle randomisation */
   useEffect(() => {
-    particlePenRef.current?.querySelectorAll('.particle').forEach(p => {
+    const particles = particlePenRef.current?.querySelectorAll('.particle');
+    particles?.forEach((p) => {
       p.setAttribute(
         'style',
         `
-        --x:${rnd(20, 80)};
-        --y:${rnd(20, 80)};
-        --duration:${rnd(6, 20)};
-        --delay:${rnd(1, 10)};
-        --alpha:${rnd(40, 90) / 100};
-        --origin-x:${Math.random() > 0.5 ? rnd(300, 800) * -1 : rnd(300, 800)}%;
-        --origin-y:${Math.random() > 0.5 ? rnd(300, 800) * -1 : rnd(300, 800)}%;
-        --size:${rnd(40, 90) / 100};
-      `
-      )
-    })
-  }, [])
+          --x: ${RANDOM(20, 80)};
+          --y: ${RANDOM(20, 80)};
+          --duration: ${RANDOM(6, 20)};
+          --delay: ${RANDOM(1, 10)};
+          --alpha: ${RANDOM(40, 90) / 100};
+          --origin-x: ${Math.random() > 0.5 ? RANDOM(300, 800) * -1 : RANDOM(300, 800)}%;
+          --origin-y: ${Math.random() > 0.5 ? RANDOM(300, 800) * -1 : RANDOM(300, 800)}%;
+          --size: ${RANDOM(40, 90) / 100};
+        `
+      );
+    });
+  }, []);
 
-  /* ---- click-handler ---------------------------------------------------- */
-  const handleClick = () => {
-    if (disabled || loading) return
-
-    const target = agents.find(
-      a => a.name.toLowerCase() === 'cypressresorts'
-    )
-    if (!target) {
-      console.error('CypressResorts agent not found')
-      return
-    }
-
-    setActiveAgent(target)
-    setIsAgentSelected(true)
-  }
-
-  /* ---- ui --------------------------------------------------------------- */
-   return (
+  return (
     <div className="relative isolate">
       <button
-        onClick={handleClick}
+        onClick={onClick}
         disabled={disabled || loading}
         className={`relative flex items-center justify-center gap-1 px-5 py-3 text-2xl font-medium text-transparent rounded-full transition-all duration-250
           ${disabled || loading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer bg-[hsl(260,97%,12%)] hover:bg-[radial-gradient(40%_50%_at_center_100%,hsl(270,97%,72%),transparent),radial-gradient(80%_100%_at_center_120%,hsl(260,97%,70%),transparent),hsl(260,97%,56%)] focus-visible:bg-[radial-gradient(40%_50%_at_center_100%,hsl(270,97%,72%),transparent),radial-gradient(80%_100%_at_center_120%,hsl(260,97%,70%),transparent),hsl(260,97%,56%)] shadow-[0_0_0_0_hsl(260,97%,61%/0),0_0.05em_0_0_hsl(260,97%,62%)_inset,0_-0.05em_0_0_hsl(260,97%,72%)_inset] hover:shadow-[0_0_6em_3em_hsl(260,97%,61%/0.75),0_0.05em_0_0_hsl(260,97%,62%)_inset,0_-0.05em_0_0_hsl(260,97%,72%)_inset] focus-visible:shadow-[0_0_6em_3em_hsl(260,97%,61%/0.75),0_0.05em_0_0_hsl(260,97%,62%)_inset,0_-0.05em_0_0_hsl(260,97%,72%)_inset] scale-100 hover:scale-110 focus-visible:scale-110 active:scale-100 before:content-[""] before:absolute before:inset-[-0.25em] before:z-[-1] before:border-4 before:border-[hsl(260,97%,50%/0.5)] before:rounded-full before:opacity-0 hover:before:opacity-100 focus-visible:before:opacity-100 before:transition-opacity'}
@@ -154,4 +112,6 @@ export default function ActivateButton ({
       </span>
     </div>
   );
-}
+};
+
+export default ActivateButton;

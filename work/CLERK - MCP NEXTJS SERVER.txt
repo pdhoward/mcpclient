@@ -1,0 +1,23 @@
+
+
+
+
+Next.js MCP Server Integration
+
+We’ve introduced an official MCP server implementation built on Next.js, enabling your users to access their Clerk data using MCP clients such as Clause, Cursor, and other AI tools.
+ 
+Rather than requiring separate MCP servers with their own authentication protocols, our approach allows you to add MCP capabilities directly to your existing application through a single API endpoint. This eliminates the overhead of deploying and managing additional services - you can expose your app's functionality to AI tools without architectural complexity.
+ 
+The following snippet demonstrates how an MCP route handler would be configured in your Next.js application that supports users authenticating with Clerk:
+
+ 
+This release focuses on Next.js support, with support for more frameworks coming soon. Support for legacy MCP clients is possible by using tools such as mcp-remote.
+ 
+Learn more about our MCP implementation in the changelog →
+OAuth provider improvements
+
+Over the past few months, we’ve been hard at work extending the capabilities of our OAuth provider. These changes paved the way for Clerk as a supported MCP Authentication provider, as well as make it more adaptable for applications needing an OAuth server.
+ 
+New OAuth consent screen with support for individual scopes
+Support for dynamic client registration, enabling clients to programmatically create an OAuth client
+In-browser token exchange support for public clients like single-page applications and mobile apps
