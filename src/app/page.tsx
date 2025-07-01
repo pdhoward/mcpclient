@@ -57,7 +57,7 @@ const ChatPage = () => {
   return (
     <div className="min-h-screen bg-black flex flex-col">
      
-      <div className="container mx-auto px-4 py-16 grow">
+       <div className="container mx-auto px-4 py-8 lg:py-16 flex-1">
         <div className="flex flex-col items-center justify-center text-center space-y-8">
           <CloudSun className="h-20 w-20 text-sky-400" />
           <h1 className="text-4xl font-bold text-white">Cypress Resort</h1>
