@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import IPhoneModal from '@/components/modal/iphone-modal';
 import VisualStage from '@/components/VisualStage';
+import {motion} from "framer-motion"
 
 // Hooks
 import { useTranscript } from '@/contexts/TranscriptContext';
@@ -99,7 +100,7 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
     const timestampValue = typeof message.timestamp === 'number' && !isNaN(message.timestamp)
       ? message.timestamp
       : Date.now(); // Fallback to current timestamp if invalid or null
-      
+
     return {
       itemId: message.id,
       type: "MESSAGE" as const,
@@ -260,46 +261,64 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
     router.push('/');
   };
 
+    // Render nothing if no active agent (handled by homepage elsewhere)
+  if (!activeAgent) return null;
+
   return (
-    <div className="min-h-screen bg-neutral-900 flex flex-col md:flex-row gap-4 p-4">
-      {/* Left Side: Component Display */}
-      <div className="flex-1 md:w-2/3 bg-neutral-800 rounded-lg shadow-lg p-4 overflow-y-auto">
-        <VisualStage />
-      </div>
+    <div className="min-h-screen bg-neutral-900 flex flex-col">
+      {/* Header with Gradient */}
+      <header className="bg-gradient-to-r from-neutral-800 to-neutral-700 p-4 flex items-center justify-between shadow-md">
+        <div className="flex items-center gap-2">
+          <img src="/logo.png" alt="Cypress Resorts" className="h-8" /> {/* Add logo to public/ */}
+          <h1 className="text-xl font-semibold text-neutral-200">Cypress Resorts</h1>
+          <h1 className="text-xl font-semibold text-neutral-200">Cypress Resorts</h1>
+        </div>
+        <span className="text-sm text-neutral-400">Luxury Awaits</span>
+      </header>
 
-      {/* Right Side: IPhoneModal */}
-      <div className="md:w-1/3 flex justify-center">
-        <IPhoneModal
-          isOpen={!!activeAgent}
-          onClose={handleClose}
-          onStartCall={onToggleConnection}
-          onEndCall={onToggleConnection}
-          onEndSession={handleEndSession}
-          onMute={toggleMute}
-          isMuted={isMuted}
-          isCallActive={isCallActive}
-          onSendText={handleTextSubmit}
-          onToggleTranscription={handleToggleTranscription}
-          showTranscription={showTranscription}
-          logs={logs}
-          transcriptItems={transcriptItems}
-        >
-          <div className="h-full flex flex-col text-neutral-200">
-            {/* Header */}
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="text-sm font-semibold">{selectedAgentName || 'Cypress Resorts'}</h3>
-              <span className="text-xs">{formatTime(timer)}</span>
-            </div>
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col md:flex-row gap-4 p-4">
+        {/* Left Side: VisualStage */}
+        <div className="flex-1 md:w-2/3 bg-neutral-800 rounded-lg shadow-lg p-4 overflow-y-auto">
+          <VisualStage />
+        </div>
 
-            {/* Transcription Area */}
-            <div className="flex-1 overflow-y-auto space-y-2 text-xs">
+        {/* Right Side: IPhoneModal */}
+        <div className="md:w-1/3 flex justify-center">
+          <IPhoneModal
+            isOpen={!!activeAgent}
+            onClose={handleClose}
+            onStartCall={onToggleConnection}
+            onEndCall={onToggleConnection}
+            onEndSession={handleEndSession}
+            onMute={toggleMute}
+            isMuted={isMuted}
+            isCallActive={isCallActive}
+            onSendText={handleTextSubmit}
+            onToggleTranscription={handleToggleTranscription}
+            showTranscription={showTranscription}
+            logs={logs}
+            transcriptItems={transcriptItems}
+          >
+            <div className="h-full flex flex-col text-neutral-200">
+              {/* Header */}
+              <div className="flex justify-between items-center mb-2 px-3">
+                <h3 className="text-sm font-semibold">{selectedAgentName || 'Cypress Resorts'}</h3>
+                <span className="text-xs">{formatTime(timer)}</span>
+              </div>
+
+              {/* Transcription Area */}
+              <div className="flex-1 overflow-y-auto space-y-2 text-xs px-3">
               {showTranscription ? (
                 transcriptItems
                   .filter((item) => item.type === 'MESSAGE' && !item.isHidden)
                   .map((item, index) => (
-                    <div
+                    <motion.div
                       key={index}
                       className={`flex ${item.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3 }}
                     >
                       <div
                         className={`max-w-[70%] p-2 rounded-2xl ${
@@ -311,7 +330,7 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
                           {new Date(item.timestamp).toLocaleTimeString()}
                         </p>
                       </div>
-                    </div>
+                    </motion.div>
                   ))
               ) : (
                 <div className="flex items-center justify-center h-full text-neutral-400 text-xs">
@@ -320,14 +339,27 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
               )}
             </div>
 
-            {/* Status */}
-            {connectionState && (
-              <div className="text-xs text-neutral-400 text-center mt-2">
-                Status: {connectionState}
+              {/* Text Input */}
+              <div className="p-3 border-t border-neutral-800">
+                <input
+                  type="text"
+                  value={userText}
+                  onChange={(e) => setUserText(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleTextSubmit(userText)}
+                  placeholder="Type a message..."
+                  className="w-full p-1.5 bg-neutral-800 text-neutral-200 text-xs rounded-lg border border-neutral-700 focus:outline-none focus:ring-1 focus:ring-gold-500"
+                />
               </div>
-            )}
-          </div>
-        </IPhoneModal>
+
+              {/* Status */}
+              {connectionState && (
+                <div className="text-xs text-neutral-400 text-center p-2">
+                  Status: {connectionState}
+                </div>
+              )}
+            </div>
+          </IPhoneModal>
+        </div>
       </div>
     </div>
   );

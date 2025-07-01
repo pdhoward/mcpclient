@@ -1,8 +1,9 @@
 'use client';
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { FaPhone, FaPhoneSlash, FaMicrophone, FaMicrophoneSlash, FaEye, FaDownload } from 'react-icons/fa';
+import { FaPhone, FaPhoneSlash, FaMicrophone, FaMicrophoneSlash, FaEye, FaUserPlus, FaFileExport, FaDownload } from 'react-icons/fa';
 import clsx from 'clsx';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { TranscriptItem } from '@/lib/types';
 
 interface IPhoneModalProps {
@@ -31,21 +32,13 @@ const IPhoneModal: React.FC<IPhoneModalProps> = ({
   onMute,
   isMuted,
   isCallActive,
-  onSendText,
   onToggleTranscription,
   showTranscription,
   logs,
   transcriptItems,
   children,
 }) => {
-  const [textInput, setTextInput] = useState('');
-
-  const handleSendText = () => {
-    if (textInput.trim()) {
-      onSendText(textInput);
-      setTextInput('');
-    }
-  };
+  const [logSearchQuery, setLogSearchQuery] = useState('');
 
   const downloadTranscription = () => {
     if (!transcriptItems) return;
@@ -62,6 +55,10 @@ const IPhoneModal: React.FC<IPhoneModalProps> = ({
     URL.revokeObjectURL(url);
   };
 
+  const filteredLogs = logs.filter((log) =>
+    log.data?.text?.toLowerCase().includes(logSearchQuery.toLowerCase())
+  );
+
   if (!isOpen) return null;
 
   return (
@@ -76,10 +73,11 @@ const IPhoneModal: React.FC<IPhoneModalProps> = ({
 
       {/* Content */}
       <div className="absolute top-6 bottom-0 left-0 right-0 flex flex-col">
-        <div className="flex-1 overflow-y-auto p-3">{children}</div>
+        {/* Main Content (transcription, input, etc.) */}
+        <div className="flex-1 overflow-y-auto">{children}</div>
 
         {/* Controls */}
-        <div className="p-3 space-y-2">
+        <div className="p-3 space-y-2 border-t border-neutral-800">
           <div className="flex items-center justify-between">
             {isCallActive ? (
               <>
@@ -93,12 +91,60 @@ const IPhoneModal: React.FC<IPhoneModalProps> = ({
                     <FaMicrophone className="text-white text-xs" />
                   )}
                 </button>
-                <button
-                  onClick={downloadTranscription}
-                  className="p-1.5 rounded-full bg-neutral-600 text-white text-xs"
-                >
-                  <FaDownload />
-                </button>
+                <div className="flex items-center gap-x-2">
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <button className="p-1.5 rounded-full bg-neutral-600 text-white text-xs">
+                        <FaUserPlus />
+                      </button>
+                    </DialogTrigger>
+                    <DialogContent className="bg-neutral-900 text-neutral-200 border-neutral-800">
+                      <DialogHeader>
+                        <DialogTitle>Select Voice</DialogTitle>
+                      </DialogHeader>
+                      <div className="text-sm text-neutral-400">Coming soon</div>
+                    </DialogContent>
+                  </Dialog>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <button className="p-1.5 rounded-full bg-neutral-600 text-white text-xs">
+                        <FaFileExport />
+                      </button>
+                    </DialogTrigger>
+                    <DialogContent className="bg-neutral-900 text-neutral-200 border-neutral-800 max-w-[90vw] max-h-[80vh] w-[400px] h-[400px] flex flex-col">
+                      <DialogHeader>
+                        <DialogTitle>System Logs</DialogTitle>
+                      </DialogHeader>
+                      <div className="mt-4">
+                        <input
+                          type="text"
+                          value={logSearchQuery}
+                          onChange={(e) => setLogSearchQuery(e.target.value)}
+                          placeholder="Search logs..."
+                          className="w-full p-1.5 bg-neutral-800 text-neutral-200 text-xs rounded-lg border border-neutral-700 focus:outline-none focus:ring-1 focus:ring-gold-500"
+                        />
+                      </div>
+                      <div className="flex-1 overflow-y-auto text-xs text-neutral-400">
+                        {filteredLogs.length > 0 ? (
+                          filteredLogs.map((log, index) => (
+                            <p key={index} className="border-b border-neutral-700 py-1">
+                              {log.data?.text ?? 'No log content'}
+                            </p>
+                          ))
+                        ) : (
+                          <p>No logs available.</p>
+                        )}
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                  <button
+                    onClick={downloadTranscription}
+                    className="p-1.5 rounded-full bg-neutral-600 text-white text-xs"
+                    title="Download Transcription"
+                  >
+                    <FaDownload />
+                  </button>
+                </div>
                 <button
                   onClick={onEndCall}
                   className="p-1.5 rounded-full bg-red-600"
@@ -117,28 +163,19 @@ const IPhoneModal: React.FC<IPhoneModalProps> = ({
                 <button
                   onClick={onEndSession}
                   className="p-1.5 rounded-full bg-neutral-600"
+                  title="End Session"
                 >
                   <FaPhoneSlash className="text-white text-xs" />
                 </button>
               </>
             )}
           </div>
-          <div className="flex items-center space-x-2">
-            <input
-              type="text"
-              value={textInput}
-              onChange={(e) => setTextInput(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSendText()}
-              placeholder="Type a message..."
-              className="flex-1 p-1.5 bg-neutral-800 text-neutral-200 text-xs rounded-lg border border-neutral-700 focus:outline-none focus:ring-1 focus:ring-gold-500"
-            />
-            <button
-              onClick={onToggleTranscription}
-              className="p-1.5 bg-neutral-700 rounded-lg text-neutral-200"
-            >
-              <FaEye className="text-xs" />
-            </button>
-          </div>
+          <button
+            onClick={onToggleTranscription}
+            className="p-1.5 bg-neutral-700 rounded-lg text-neutral-200 w-full flex justify-center"
+          >
+            <FaEye className="text-xs" />
+          </button>
         </div>
       </div>
 
