@@ -7,7 +7,7 @@ export interface Message {
     id: string;    
     role: "user" | "assistant" | "system";
     content?: string | undefined;
-    context?: UserMessageContext | AgentResponseContext;
+    context?: MessageContext;
     type?: string;
     text?: string;
     isFinal?: boolean;
@@ -19,7 +19,7 @@ export interface Message {
       contextStatePending?: boolean,
       toolPending?: string,
     }>;
-    timestamp: number | null;  // Unix timestamp in milliseconds
+    timestamp: number | null | string;  // Unix timestamp in milliseconds
     tokens?: number
     response?: {
       usage: {
@@ -33,19 +33,11 @@ export interface Message {
   export type MessageStatus = "speaking" | "processing" | "done";
 
    // Structure for User Input
-   export interface UserMessageContext {
+   export interface MessageContext {
+    id: string; 
+    name: string;   
     message: string; // Stores the actual text input from the user
-  }
-
-  // Structure for Agent Response (Flexible for any agent)
-  export interface AgentResponseContext {
-    name: string; // Agent's name
-    id: string; // Agent's ID
-    confidence: number;
-    message: string; // The agent’s response
-    form?: Record<string, any>; // Optional for agents that return structured data
-    isComplete?: boolean;
-  }
+  } 
 
   // Define Conversation as Simply an Array of Messages
   export type Conversation = Message[];

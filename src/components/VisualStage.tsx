@@ -5,10 +5,11 @@ import MenuComponent from '@/components/prebuilt/MenuComponent';
 import BillingSummaryComponent from '@/components/prebuilt/BillingSummaryComponent';
 import SitePlanComponent from '@/components/prebuilt/SitePlanComponent';
 
-const ComponentDisplay = () => {
-  const pathname = usePathname();
-  const componentId = pathname.split('/components/')[1];
+interface VisualStageProps {
+  componentId: string;
+}
 
+const VisualStage: React.FC<VisualStageProps> = ({ componentId }) => {
   const components: { [key: string]: React.ReactNode } = {
     room: <RoomComponent />,
     menu: <MenuComponent />,
@@ -25,4 +26,4 @@ const ComponentDisplay = () => {
   );
 };
 
-export default ComponentDisplay;
+export default VisualStage;

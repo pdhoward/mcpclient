@@ -156,8 +156,7 @@ export function useHandleServerEvent({
   const handleServerEvent = async (serverEvent: ServerEvent) => {
     // Log all server events for debugging
     logServerEvent(serverEvent);
-    console.log(`----Entering Handle Server Event ----`);
-
+   
     switch (serverEvent.type) {
       // Session created with initial configuration
       case 'session.created': {
@@ -174,7 +173,7 @@ export function useHandleServerEvent({
 
       // Session updated with new configuration
       case 'session.updated': {
-        console.log('Session updated:', JSON.stringify(serverEvent.session, null, 2));
+        console.log('Session updated');
         break;
       }
 

@@ -53,12 +53,13 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isCallActive, setIsCallActive] = useState<boolean>(false);
   const [showTranscription, setShowTranscription] = useState<boolean>(true);
+  const [componentId, setComponentId] = useState<string>(''); // state for VisualStage
   const [timer, setTimer] = useState<number>(0);
 
   // Hooks
   const router = useRouter();
   const { transcriptItems } = useTranscript();
-  const { logs: messageLogs, conversation } = useMappedMessages();
+  const { logs: messageLogs } = useMappedMessages();
   const { connectionState, dataChannel, dcRef, connectToRealtime, disconnectFromRealtime, audioElement } =
     useSessionManager({
       isAudioPlaybackEnabled,
@@ -201,35 +202,39 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
   useEffect(() => {
     if (voice) setVoice(voice);
   }, [voice]);
-
-  // Intent Detection via Transcript
-  useEffect(() => {
-    const latestUserMessage = transcriptItems
-      .filter((item) => item.role === 'user' && item.type === 'MESSAGE')
-      .slice(-1)[0];
-    if (latestUserMessage?.data?.text) {
-      const text = latestUserMessage.data.text.toLowerCase();
-      if (text.includes('show the room') || text.includes('see the unit')) {
-        router.push('/components/room');
-      } else if (text.includes('view the menu') || text.includes('see the menu')) {
-        router.push('/components/menu');
-      } else if (text.includes('billing summary') || text.includes('show billing')) {
-        router.push('/components/billing');
-      } else if (text.includes('site plan') || text.includes('show site')) {
-        router.push('/components/siteplan');
-      }
+ 
+ // Intent Detection for VisualStage
+useEffect(() => {
+  const latestUserMessage = transcriptItems
+    .filter((item) => item.role === 'user' && item.type === 'MESSAGE')
+    .slice(-1)[0];   
+  if (latestUserMessage?.title) {
+    const text = latestUserMessage.title.toLowerCase();
+    switch (true) {
+      case text.includes('show the room') || text.includes('see the unit'):        
+        setComponentId('room');
+        break;
+      case text.includes('view the menu') || text.includes('see the menu'):
+        setComponentId('menu');
+        break;
+      case text.includes('billing summary') || text.includes('show billing'):
+        setComponentId('billing');
+        break;
+      case text.includes('site plan') || text.includes('show site'):
+        setComponentId('siteplan');
+        break;
+      default:
+        setComponentId(''); // Reset to default (welcome message)
+        break;
     }
-  }, [transcriptItems, router]);
+  }
+}, [transcriptItems]);
 
     // Auto-scroll to latest message
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [transcriptItems]);
-
-  // Debug transcriptItems
-  useEffect(() => {
-    console.log('Transcript Items:', transcriptItems);
-  }, [transcriptItems]);
+  
 
   // Event Handlers
   const onToggleConnection = () => {
@@ -277,27 +282,24 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
     // Render nothing if no active agent (handled by homepage elsewhere)
   if (!activeAgent) return null;
 
-  return (
-    <div className="min-h-screen bg-neutral-900 flex flex-col">
-      {/* Header with Gradient */}
+ return (
+    <motion.div
+      className="fixed inset-0 bg-black bg-opacity-50 z-50 flex flex-col"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
       <header className="bg-gradient-to-r from-neutral-800 to-neutral-700 p-4 flex items-center justify-between shadow-md">
         <div className="flex items-center gap-2">
-          <img src="/logo.png" alt="Cypress Resorts" className="h-8" /> {/* Add logo to public/ */}
-          <h1 className="text-xl font-semibold text-neutral-200">Cypress Resorts</h1>
           <h1 className="text-xl font-semibold text-neutral-200">Cypress Resorts</h1>
         </div>
         <span className="text-sm text-neutral-400">Luxury Awaits</span>
       </header>
-
-      {/* Main Content */}
       <div className="flex-1 flex flex-col md:flex-row gap-4 p-4">
-        {/* Left Side: VisualStage */}
         <div className="flex-1 md:w-2/3 bg-neutral-800 rounded-lg shadow-lg p-4 overflow-y-auto">
-          <VisualStage />
+           <VisualStage componentId={componentId} />
         </div>
-
-        {/* Right Side: IPhoneModal */}
-        <div className="md:w-1/3 flex justify-center">
+        <div className="md:w-1/3 flex justify-center items-center">
           <IPhoneModal
             isOpen={!!activeAgent}
             onClose={handleClose}
@@ -314,14 +316,11 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
             transcriptItems={transcriptItems}
           >
             <div className="h-full flex flex-col text-neutral-200">
-              {/* Header */}
               <div className="flex justify-between items-center mb-2 px-3">
                 <h3 className="text-sm font-semibold">{selectedAgentName || 'Cypress Resorts'}</h3>
                 <span className="text-xs">{formatTime(timer)}</span>
               </div>
-
-              {/* Transcription Area */}
-               <div className="flex-1 overflow-y-auto space-y-2 mb-4 no-scrollbar">
+              <div className="flex-1 overflow-y-auto space-y-2 mb-4 no-scrollbar max-w-full box-sizing-border-box">
                 {showTranscription ? (
                   transcriptItems
                     .filter((item) => item.type === 'MESSAGE' && !item.isHidden)
@@ -356,8 +355,6 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
                 )}
                 <div ref={messagesEndRef} />
               </div>
-
-              {/* Text Input */}
               <div className="p-3 border-t border-neutral-800">
                 <input
                   type="text"
@@ -368,8 +365,6 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
                   className="w-full p-1.5 bg-neutral-800 text-neutral-200 text-xs rounded-lg border border-neutral-700 focus:outline-none focus:ring-1 focus:ring-gold-500"
                 />
               </div>
-
-              {/* Status */}
               {connectionState && (
                 <div className="text-xs text-neutral-400 text-center p-2">
                   Status: {connectionState}
@@ -379,8 +374,10 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
           </IPhoneModal>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
+
+
 }
 
 export default MetaAgent;

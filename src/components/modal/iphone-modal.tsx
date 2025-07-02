@@ -65,14 +65,14 @@ const IPhoneModal: React.FC<IPhoneModalProps> = ({
   };
 
   const filteredLogs = logs.filter((log) =>
-    log.data?.text?.toLowerCase().includes(logSearchQuery.toLowerCase())
+    log.title?.toLowerCase().includes(logSearchQuery.toLowerCase())
   );
 
   if (!isOpen) return null;
 
-   return (
+  return (
     <motion.div
-      className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50"
+      className="relative flex items-center justify-center w-full h-full"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}

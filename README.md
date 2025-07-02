@@ -25,6 +25,10 @@ https://supabase.com/ui/docs/getting-started/introduction
 
 
 -----------------
+CloudFlare verified bots program
+https://blog.cloudflare.com/verified-bots-with-cryptography/
+
+-----------
 
 This is an example implementation of the Model Context Protocol SDK's client code with the Vercel AI SDK which simplifies handling an LLM chat in the browser. Check out [how to make your own mcp servers quick here](https://mcp-framework.com)
 
