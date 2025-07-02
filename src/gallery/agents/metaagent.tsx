@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import IPhoneModal from '@/components/modal/iphone-modal';
 import VisualStage from '@/components/VisualStage';
@@ -94,6 +94,9 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
     sendClientEvent,
     setSelectedAgentName,
   });
+
+  // Auto-scroll ref
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Transform messageLogs to TranscriptItem[]
   const logs: TranscriptItem[] = messageLogs.map((message: Message) => {
@@ -218,6 +221,16 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
     }
   }, [transcriptItems, router]);
 
+    // Auto-scroll to latest message
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [transcriptItems]);
+
+  // Debug transcriptItems
+  useEffect(() => {
+    console.log('Transcript Items:', transcriptItems);
+  }, [transcriptItems]);
+
   // Event Handlers
   const onToggleConnection = () => {
     if (sessionStatus === 'CONNECTED' || sessionStatus === 'CONNECTING') {
@@ -308,36 +321,41 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
               </div>
 
               {/* Transcription Area */}
-              <div className="flex-1 overflow-y-auto space-y-2 text-xs px-3">
-              {showTranscription ? (
-                transcriptItems
-                  .filter((item) => item.type === 'MESSAGE' && !item.isHidden)
-                  .map((item, index) => (
-                    <motion.div
-                      key={index}
-                      className={`flex ${item.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3 }}
-                    >
-                      <div
-                        className={`max-w-[70%] p-2 rounded-2xl ${
-                          item.role === 'user' ? 'bg-blue-600 text-white' : 'bg-neutral-700 text-neutral-200'
+               <div className="flex-1 overflow-y-auto space-y-2 mb-4 no-scrollbar">
+                {showTranscription ? (
+                  transcriptItems
+                    .filter((item) => item.type === 'MESSAGE' && !item.isHidden)
+                    .map((item, index) => (
+                      <motion.div
+                        key={index}
+                        className={`flex relative ${
+                          item.role === 'user' ? 'justify-end' : 'justify-start'
                         }`}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3 }}
                       >
-                        <p>{item.data?.text ?? 'No message content'}</p>
-                        <p className="text-[8px] text-neutral-400 mt-1">
-                          {new Date(item.timestamp).toLocaleTimeString()}
-                        </p>
-                      </div>
-                    </motion.div>
-                  ))
-              ) : (
-                <div className="flex items-center justify-center h-full text-neutral-400 text-xs">
-                  Transcription Hidden
-                </div>
-              )}
-            </div>
+                        <div
+                          className={`relative max-w-[70%] p-2 rounded-2xl shadow-sm ${
+                            item.role === 'user'
+                              ? 'bg-blue-600 text-white pr-3 after:content-[""] after:absolute after:bottom-0 after:right-[-6px] after:border-[6px] after:border-transparent after:border-l-blue-600 after:border-b-blue-600'
+                              : 'bg-neutral-700 text-neutral-200 pl-3 after:content-[""] after:absolute after:bottom-0 after:left-[-6px] after:border-[6px] after:border-transparent after:border-r-neutral-700 after:border-b-neutral-700'
+                          }`}
+                        >
+                          <p className="text-xs">{item.title ?? 'No message content'}</p>
+                          <p className="text-[8px] text-neutral-400 mt-1">
+                            {item.timestamp}
+                          </p>
+                        </div>
+                      </motion.div>
+                    ))
+                ) : (
+                  <div className="flex items-center justify-center h-full text-neutral-400 text-xs">
+                    Transcription Hidden
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
 
               {/* Text Input */}
               <div className="p-3 border-t border-neutral-800">
