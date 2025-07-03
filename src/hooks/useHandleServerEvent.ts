@@ -282,7 +282,9 @@ export function useHandleServerEvent({
         break;
       }
 
-      // Function call arguments streaming completed
+      //////////////////////////////////////////////////////////////
+      ////    case for intercepting and detecting intent      /////
+      ////////////////////////////////////////////////////////////
       case 'response.function_call_arguments.done': {
         console.log('Function call arguments done:', serverEvent);
         const { call_id, name, arguments: args } = serverEvent;
