@@ -9,6 +9,7 @@ const WaterfallVideoComponent: React.FC = () => {
           height="auto"
           controls
           autoPlay
+          muted
           preload="auto"
           className="rounded-lg"
           aria-label="Cypress Resorts Waterfall Video"

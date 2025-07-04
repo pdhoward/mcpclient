@@ -7,6 +7,8 @@ const SitePlanComponent: React.FC = () => (
           width="100%"
           height="auto"
           controls
+          autoPlay
+          muted
           preload="auto"
           className="rounded-lg"
           aria-label="Cypress Resorts Site Plan"

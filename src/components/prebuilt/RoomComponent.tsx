@@ -54,7 +54,8 @@ const RoomComponent: React.FC = () => {
           width="100%"
           height="auto"
           controls
-          autoPlay         
+          autoPlay     
+          muted    
           preload="auto"
           className="rounded-lg"
           aria-label={videoPlaylist[currentVideoIndex].label}
