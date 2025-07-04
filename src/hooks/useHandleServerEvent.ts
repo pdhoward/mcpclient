@@ -41,13 +41,14 @@ export function useHandleServerEvent({
   /////            Event Listeners for Tool Calls           ///
   //// triggered by 'response.function_call_arguments.done' //
   ///////////////////////////////////////////////////////////
-  type ComponentName = 'menu' | 'room' | 'billing' | 'spa_pricing' | 'waterfall_video' | 'PLACEHOLDER';
+  type ComponentName = 'menu' | 'room' | 'billing' | 'spa_pricing' | 'waterfall_video' | 'site_plan' | 'PLACEHOLDER';
   const visualStageResponses: Record<ComponentName, string>  = {
         menu: 'Here is the menu from our executive chef. Let me know if you have any questions!',
         room: 'Here’s a look at our luxury villas. Would you like to book one?',
         billing: 'Here’s your billing summary. Let me know if you have any questions.',
         spa_pricing: 'Here are our spa treatment prices. Would you like me to explain any of them?',
         waterfall_video: 'Here’s a video of our signature 50-foot waterfall. Enjoy!',
+        site_plan: 'Here’s an animation of our plans to craft a 25+ unit luxury woodland resort over the next few years. Let me know if you have any questions!',
         PLACEHOLDER: "for future components that may require a server call"
       };
 

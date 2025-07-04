@@ -23,24 +23,31 @@ const RoomComponent: React.FC = () => {
     },
   ];
 
-   // Handle video end to play the next video or loop back
+  // Handle video end to play the next video or loop back
   const handleVideoEnded = () => {
     setCurrentVideoIndex((prevIndex) => {
       const nextIndex = (prevIndex + 1) % videoPlaylist.length;
-      if (videoRef.current) {
-        videoRef.current.load(); // Reload video element with new source
-        videoRef.current.play(); // Autoplay the next video
-      }
       return nextIndex;
     });
   };
 
-  // Ensure autoplay on initial load
+    // Load and play video when index changes
   useEffect(() => {
     if (videoRef.current) {
-      videoRef.current.play().catch((error) => {
-        console.error('Autoplay failed:', error);
-      });
+      const playVideo = () => {
+        videoRef.current!.play().catch((error) => {
+          console.error('Autoplay failed:', error);
+        });
+      };
+
+      // Wait for video data to load before playing
+      videoRef.current.load();
+      videoRef.current.addEventListener('loadeddata', playVideo);
+
+      // Cleanup event listener
+      return () => {
+        videoRef.current?.removeEventListener('loadeddata', playVideo);
+      };
     }
   }, [currentVideoIndex]);
   

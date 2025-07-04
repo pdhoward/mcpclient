@@ -16,7 +16,7 @@ const VisualStage: React.FC<VisualStageProps> = ({ componentId }) => {
     room: <RoomComponent />,
     menu: <MenuComponent />,
     billing: <BillingSummaryComponent />,
-    siteplan: <SitePlanComponent />,
+    site_plan: <SitePlanComponent />,
     spa_pricing: <SpaPricingComponent />,
     waterfall_video: <WaterfallVideoComponent />
 };
