@@ -11,6 +11,7 @@ export interface UseHandleServerEventParams {
   selectedAgentConfigSet: AgentConfig[] | null;
   sendClientEvent: (eventObj: any, eventNameSuffix?: string) => void;
   setSelectedAgentName: (name: string) => void;
+  setComponentId: (id: string) => void; // New
   shouldForceResponse?: boolean;
 }
 
@@ -20,6 +21,7 @@ export function useHandleServerEvent({
   selectedAgentConfigSet,
   sendClientEvent,
   setSelectedAgentName,
+  setComponentId,
 }: UseHandleServerEventParams) {
 
   const {
@@ -39,6 +41,16 @@ export function useHandleServerEvent({
   /////            Event Listeners for Tool Calls           ///
   //// triggered by 'response.function_call_arguments.done' //
   ///////////////////////////////////////////////////////////
+  type ComponentName = 'menu' | 'room' | 'billing' | 'spa_pricing' | 'waterfall_video' | 'PLACEHOLDER';
+  const visualStageResponses: Record<ComponentName, string>  = {
+        menu: 'Here is the menu from our executive chef. Let me know if you have any questions!',
+        room: 'Here’s a look at our luxury villas. Would you like to book one?',
+        billing: 'Here’s your billing summary. Let me know if you have any questions.',
+        spa_pricing: 'Here are our spa treatment prices. Would you like me to explain any of them?',
+        waterfall_video: 'Here’s a video of our signature 50-foot waterfall. Enjoy!',
+        PLACEHOLDER: "for future components that may require a server call"
+      };
+
   const handleFunctionCall = async (functionCallParams: {
     name: string;
     call_id?: string;
@@ -66,6 +78,35 @@ export function useHandleServerEvent({
     // Log function call details for debugging
     console.log(`Processing function call: ${name}, call_id: ${call_id}, args:`, args);
     addTranscriptBreadcrumb(`Function call: ${name}`, { call_id, args });
+
+    // Handles visual component rendering requests (e.g., show_menu, show_room)
+    // Updates VisualStage with componentId and triggers a contextual voice response
+    if (name === 'show_component') {
+      const { component_name }: { component_name: ComponentName } = JSON.parse(argsString);
+      setComponentId(component_name);
+
+      let responseText = visualStageResponses[component_name] || `Your requested information!`;
+      
+       if (component_name === 'PLACEHOLDER') {
+        const response = await fetch('/api/mcp/execute-tool', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ toolName: 'show_component', args: { component_name } }),
+        });
+        const result = await response.json();
+        responseText = `Here are our spa treatment prices: ${result.prices.join(', ')}. Would you like me to explain any of them?`;
+      }
+      sendClientEvent({
+        type: 'conversation.item.create',
+        item: {
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'text', text: visualStageResponses[component_name] || 'Here’s the requested information!' }]
+        }
+      });
+      console.log(`show_component called with component_name: ${component_name}`);
+      return;
+    }
 
     // Handle special case for agent transfer
     if (name === 'transferAgents') {

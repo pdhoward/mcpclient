@@ -94,6 +94,7 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
     selectedAgentConfigSet,
     sendClientEvent,
     setSelectedAgentName,
+    setComponentId
   });
 
   // Auto-scroll ref
@@ -203,32 +204,32 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
     if (voice) setVoice(voice);
   }, [voice]);
  
- // Intent Detection for VisualStage
-useEffect(() => {
-  const latestUserMessage = transcriptItems
-    .filter((item) => item.role === 'user' && item.type === 'MESSAGE')
-    .slice(-1)[0];   
-  if (latestUserMessage?.title) {
-    const text = latestUserMessage.title.toLowerCase();
-    switch (true) {
-      case text.includes('show the room') || text.includes('see the unit'):        
-        setComponentId('room');
-        break;
-      case text.includes('view the menu') || text.includes('see the menu'):
-        setComponentId('menu');
-        break;
-      case text.includes('billing summary') || text.includes('show billing'):
-        setComponentId('billing');
-        break;
-      case text.includes('site plan') || text.includes('show site'):
-        setComponentId('siteplan');
-        break;
-      default:
-        setComponentId(''); // Reset to default (welcome message)
-        break;
-    }
-  }
-}, [transcriptItems]);
+//  // Intent Detection for VisualStage
+// useEffect(() => {
+//   const latestUserMessage = transcriptItems
+//     .filter((item) => item.role === 'user' && item.type === 'MESSAGE')
+//     .slice(-1)[0];   
+//   if (latestUserMessage?.title) {
+//     const text = latestUserMessage.title.toLowerCase();
+//     switch (true) {
+//       case text.includes('show the room') || text.includes('see the unit'):        
+//         setComponentId('room');
+//         break;
+//       case text.includes('view the menu') || text.includes('see the menu'):
+//         setComponentId('menu');
+//         break;
+//       case text.includes('billing summary') || text.includes('show billing'):
+//         setComponentId('billing');
+//         break;
+//       case text.includes('site plan') || text.includes('show site'):
+//         setComponentId('siteplan');
+//         break;
+//       default:
+//         setComponentId(''); // Reset to default (welcome message)
+//         break;
+//     }
+//   }
+// }, [transcriptItems]);
 
     // Auto-scroll to latest message
   useEffect(() => {
@@ -317,7 +318,7 @@ useEffect(() => {
           >
             <div className="h-full flex flex-col text-neutral-200">
               <div className="flex justify-between items-center mb-2 px-3">
-                <h3 className="text-sm font-semibold">{selectedAgentName || 'Cypress Resorts'}</h3>
+                <h3 className="text-sm font-semibold">{'Cypress Resorts '}</h3>
                 <span className="text-xs">{formatTime(timer)}</span>
               </div>
               <div className="flex-1 overflow-y-auto space-y-2 mb-4 no-scrollbar max-w-full box-sizing-border-box">
@@ -341,7 +342,7 @@ useEffect(() => {
                               : 'bg-neutral-700 text-neutral-200 pl-3 after:content-[""] after:absolute after:bottom-0 after:left-[-6px] after:border-[6px] after:border-transparent after:border-r-neutral-700 after:border-b-neutral-700'
                           }`}
                         >
-                          <p className="text-xs">{item.title ?? 'No message content'}</p>
+                          <p className="text-[10px]">{item.title ?? 'No message content'}</p>
                           <p className="text-[8px] text-neutral-400 mt-1">
                             {item.timestamp}
                           </p>
