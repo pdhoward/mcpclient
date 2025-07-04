@@ -104,6 +104,13 @@ export function useHandleServerEvent({
           content: [{ type: 'text', text: visualStageResponses[component_name] || 'Here’s the requested information!' }]
         }
       });
+      sendClientEvent({
+        type: 'response.create',
+        response: {
+          modalities: ['text', 'audio'], // Request both text and audio
+          instructions: `Speak the following: ${visualStageResponses[component_name]}`,
+        },
+      })
       console.log(`show_component called with component_name: ${component_name}`);
       return;
     }
