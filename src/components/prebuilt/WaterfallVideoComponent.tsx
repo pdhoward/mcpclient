@@ -1,13 +1,14 @@
 
 const WaterfallVideoComponent: React.FC = () => {
   return (
-    <div className="bg-neutral-800 p-6 rounded-lg shadow-lg text-neutral-200">
-      <h2 className="text-xl font-semibold mb-4">Cypress Resorts Waterfall</h2>
+    <div className="bg-neutral-800 p-4 rounded-lg shadow-lg text-neutral-200">
+      <h2 className="text-lg font-semibold mb-2">Cypress Resorts Waterfall</h2>
       <div className="relative w-full max-w-[600px] mx-auto">
         <video
           width="100%"
           height="auto"
           controls
+          autoPlay
           preload="auto"
           className="rounded-lg"
           aria-label="Cypress Resorts Waterfall Video"
