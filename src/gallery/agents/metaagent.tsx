@@ -298,7 +298,7 @@ function MetaAgent({ activeAgent, setActiveAgent, voice }: MetaAgentProps) {
       </header>
       <div className="flex-1 flex flex-col md:flex-row gap-4 p-4">
         <div className="flex-1 md:w-2/3 bg-neutral-800 rounded-lg shadow-lg p-4 overflow-y-auto">
-           <VisualStage componentId={componentId} />
+           <VisualStage componentId={componentId} setComponentId={setComponentId} />
         </div>
         <div className="md:w-1/3 flex justify-center items-center">
           <IPhoneModal
