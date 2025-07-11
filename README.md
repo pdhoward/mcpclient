@@ -30,6 +30,28 @@ https://blog.cloudflare.com/verified-bots-with-cryptography/
 
 -----------
 
+Vapi Expressive Voice with Hume
+
+https://dashboard.vapi.ai/
+
+---------
+
+PUBLIC APIs
+https://github.com/public-apis/public-apis
+
+----------
+ai sdk and gtoc
+Grok 4 live on 
+@aisdk
+
+𝚒𝚖𝚙𝚘𝚛𝚝 { 𝚐𝚎𝚗𝚎𝚛𝚊𝚝𝚎𝚃𝚎𝚡𝚝 } 𝚏𝚛𝚘𝚖 '𝚊𝚒'
+𝚌𝚘𝚗𝚜𝚝 { 𝚝𝚎𝚡𝚝 } = 𝚊𝚠𝚊𝚒𝚝 𝚐𝚎𝚗𝚎𝚛𝚊𝚝𝚎𝚃𝚎𝚡𝚝({
+  𝚖𝚘𝚍𝚎𝚕: '𝚡𝚊𝚒/𝚐𝚛𝚘𝚔-𝟺',
+  𝚙𝚛𝚘𝚖𝚙𝚝: 'T𝚑𝚎 𝚊𝚗𝚜𝚠𝚎𝚛 𝚝𝚘 𝚕𝚒𝚏𝚎'
+})
+
+-------
+
 This is an example implementation of the Model Context Protocol SDK's client code with the Vercel AI SDK which simplifies handling an LLM chat in the browser. Check out [how to make your own mcp servers quick here](https://mcp-framework.com)
 
 ## How It Works
